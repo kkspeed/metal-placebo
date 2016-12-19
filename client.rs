@@ -230,7 +230,7 @@ impl ClientList for ClientL {
     }
 
     fn rank(&mut self) {
-        self.sort_by_key(|c| -c.borrow().weight);
+        self.sort_by_key(|c| (c.tag(), -c.borrow().weight));
     }
 
     fn show(&mut self) {

@@ -14,19 +14,18 @@ use x11::{xlib, keysym};
 mod util;
 mod atoms;
 mod client;
+mod xproto;
 
 use atoms::Atoms;
 use client::{ClientL, ClientList, ClientW, Rect};
 use util::{clean_mask, spawn};
 
-const XC_LEFT_PTR: c_uint = 68;
-const WITHDRAWN_STATE: c_ulong = 0;
+const FOCUSED_BORDER_COLOR: &'static str = "RGBi:0.0/1.0/1.0";
+const NORMAL_BORDER_COLOR: &'static str = "RGBi:0.0/0.3/0.3";
 
-const FOCUSED_BORDER_COLOR: &'static str = "RGBi:1.0/0.0/0.0";
-const NORMAL_BORDER_COLOR: &'static str = "RGBi:0.0/1.0/0.0";
-
-const BORDER_WIDTH: c_int = 5;
-const BAR_HEIGHT: c_int = 20;
+const BORDER_WIDTH: c_int = 3;
+const OVERVIEW_INSET: c_int = 15;
+const BAR_HEIGHT: c_int = 15;
 
 #[allow(unused_variables)]
 const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))] =
@@ -35,18 +34,34 @@ const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))] =
       (xlib::Mod1Mask, keysym::XK_t, &|w| spawn("xterm")),
       (xlib::Mod1Mask, keysym::XK_j, &|w| w.shift_focus(1)),
       (xlib::Mod1Mask, keysym::XK_k, &|w| w.shift_focus(-1)),
-      (xlib::Mod1Mask, keysym::XK_Return, &|w| w.zoom()),
-      (xlib::Mod1Mask, keysym::XK_1, &|w| w.select_tag(1 as c_uchar)),
-      (xlib::Mod1Mask, keysym::XK_2, &|w| w.select_tag(2 as c_uchar)),
-      (xlib::Mod1Mask, keysym::XK_3, &|w| w.select_tag(3 as c_uchar)),
-      (xlib::Mod1Mask, keysym::XK_0, &|w| w.select_tag(0 as c_uchar)),
-      (xlib::Mod1Mask | xlib::ShiftMask, keysym::XK_1, &|w| w.add_tag(1 as c_uchar)),
-      (xlib::Mod1Mask | xlib::ShiftMask, keysym::XK_2, &|w| w.add_tag(2 as c_uchar)),
-      (xlib::Mod1Mask | xlib::ShiftMask, keysym::XK_3, &|w| w.add_tag(3 as c_uchar)),
-      (xlib::Mod1Mask | xlib::ShiftMask, keysym::XK_0, &|w| w.add_tag(0 as c_uchar)),
-      (xlib::Mod1Mask, keysym::XK_F4, &|w| w.kill_client())];
+      (xlib::Mod1Mask, keysym::XK_F4, &|w| w.kill_client()),
+      (xlib::Mod1Mask, keysym::XK_F2, &|w| w.select_tag(TAG_OVERVIEW)),
+      (xlib::Mod1Mask,
+       keysym::XK_Return,
+       &|w| {
+        if let Some(focus) = w.current_focus {
+            if w.current_tag == TAG_OVERVIEW && w.current_stack.len() > focus {
+                let client = w.current_stack[focus].clone();
+                w.select_tag(client.tag());
+            } else {
+                w.zoom();
+            }
+        }
+    })];
 
-const TAG_DEFAULT: c_uchar = 1;
+const TAG_KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))] =
+    &define_tags!(xlib::Mod1Mask,
+                  xlib::ShiftMask,
+                  ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']);
+
+type LayoutFn = &'static Fn(&ClientL, c_int, c_int, c_int, c_int)
+                            -> Vec<(c_int, c_int, c_int, c_int)>;
+
+const TAG_LAYOUT: &'static [(c_uchar, LayoutFn)] = &[('9' as c_uchar, &fullscreen),
+                                                     (TAG_OVERVIEW, &overview)];
+
+const TAG_DEFAULT: c_uchar = '1' as c_uchar;
+const TAG_OVERVIEW: c_uchar = 0 as c_uchar;
 
 fn tile(clients: &ClientL,
         pane_x: c_int,
@@ -84,6 +99,58 @@ fn tile(clients: &ClientL,
         count = count - 1;
     }
     result
+}
+
+fn fullscreen(clients: &ClientL,
+              pane_x: c_int,
+              pane_y: c_int,
+              pane_width: c_int,
+              pane_height: c_int)
+              -> Vec<(c_int, c_int, c_int, c_int)> {
+    vec![(pane_x, pane_y, pane_width, pane_height); clients.len()]
+}
+
+fn overview(clients: &ClientL,
+            pane_x: c_int,
+            pane_y: c_int,
+            pane_width: c_int,
+            pane_height: c_int)
+            -> Vec<(c_int, c_int, c_int, c_int)> {
+    let l = clients.len();
+    let mut result = vec![(pane_x, pane_y, pane_width, pane_height)];
+    let mut direction = 0;
+    while result.len() < l {
+        let mut tmp = Vec::new();
+        for &(x, y, width, height) in &result {
+            if direction == 0 {
+                tmp.push((x, y, width / 2 - OVERVIEW_INSET, height - OVERVIEW_INSET));
+                tmp.push((x + width / 2 + OVERVIEW_INSET,
+                          y,
+                          width / 2 - OVERVIEW_INSET,
+                          height - OVERVIEW_INSET));
+            } else {
+                tmp.push((x, y, width - OVERVIEW_INSET, height / 2 - OVERVIEW_INSET));
+                tmp.push((x,
+                          y + height / 2 + OVERVIEW_INSET,
+                          width - OVERVIEW_INSET,
+                          height / 2 - OVERVIEW_INSET));
+            }
+        }
+        tmp.sort_by_key(|c| (c.1, c.0));
+        direction = direction ^ 1;
+        result = tmp;
+    }
+
+    result
+}
+
+fn lookup_layout(tag: c_uchar) -> Option<LayoutFn> {
+    for &(t, f) in TAG_LAYOUT {
+        if t == tag {
+            return Some(f);
+        }
+    }
+    None
 }
 
 struct Colors {
@@ -173,7 +240,7 @@ impl WindowManager {
                                   net_atom_list.len() as c_int);
             xlib::XDeleteProperty(display, root, wm.atoms.net_client_list);
             let mut xattr: xlib::XSetWindowAttributes = zeroed();
-            xattr.cursor = xlib::XCreateFontCursor(display, XC_LEFT_PTR);
+            xattr.cursor = xlib::XCreateFontCursor(display, xproto::XC_LEFT_PTR);
             xattr.event_mask =
                 xlib::SubstructureNotifyMask | xlib::SubstructureRedirectMask |
                 xlib::ButtonPressMask | xlib::PointerMotionMask |
@@ -223,7 +290,18 @@ impl WindowManager {
                                    xlib::GrabModeAsync,
                                    xlib::GrabModeAsync);
                 }
-
+            }
+            for &key in TAG_KEYS {
+                let code = xlib::XKeysymToKeycode(self.display, key.1 as u64);
+                for modifier in modifiers.iter() {
+                    xlib::XGrabKey(self.display,
+                                   code as i32,
+                                   key.0 | modifier,
+                                   self.root,
+                                   1,
+                                   xlib::GrabModeAsync,
+                                   xlib::GrabModeAsync);
+                }
             }
         }
     }
@@ -316,6 +394,7 @@ impl WindowManager {
                                       xlib::PropModeReplace,
                                       &window as *const u64 as *const u8,
                                       1);
+                xlib::XRaiseWindow(self.display, window);
             }
             let client = self.current_stack[c].clone();
             let atom = self.atoms.wm_take_focus;
@@ -368,8 +447,13 @@ impl WindowManager {
     }
 
     fn manage_window(&mut self, window: c_ulong, xa: &xlib::XWindowAttributes) {
+        let tag = if self.current_tag == TAG_OVERVIEW {
+            TAG_DEFAULT
+        } else {
+            self.current_tag
+        };
         let mut client = ClientW::new(self.display, window, self.current_tag, self.atoms.clone());
-        client.borrow_mut().tag = self.current_tag;
+        client.borrow_mut().tag = tag;
         client.borrow_mut().set_size(xa.x, xa.y, xa.width, xa.height);
         client.borrow_mut().save_window_size();
         unsafe {
@@ -401,7 +485,7 @@ impl WindowManager {
         let index = self.get_client_index(client.clone());
         if !destroy {
             x_disable_error_unsafe!(self.display, {
-                client.clone().set_state(WITHDRAWN_STATE);
+                client.clone().set_state(xproto::WITHDRAWN_STATE);
             });
         }
         self.clients.remove(index);
@@ -412,7 +496,7 @@ impl WindowManager {
     fn arrange_windows(&mut self) {
         let tag = self.current_tag;
         self.current_stack = self.clients
-            .select_clients(&|c| c.tag() == tag,
+            .select_clients(&|c| c.tag() == tag || tag == TAG_OVERVIEW,
                             true,
                             &|c| c.show(true),
                             &|c| c.show(false));
@@ -425,11 +509,14 @@ impl WindowManager {
             None
         };
         self.set_focus(focus);
-        let positions = tile(&self.current_stack,
-                             0,
-                             BAR_HEIGHT,
-                             self.screen_width,
-                             self.screen_height - BAR_HEIGHT);
+        let t = &tile;
+        let layout_fn = lookup_layout(tag).unwrap_or(t);
+        let positions = layout_fn(&self.current_stack,
+                                  0,
+                                  BAR_HEIGHT,
+                                  self.screen_width,
+                                  self.screen_height - BAR_HEIGHT);
+
         for i in 0..self.current_stack.len() {
             let mut client = self.current_stack[i].clone();
             client.resize(Rect {
@@ -439,7 +526,6 @@ impl WindowManager {
                 height: positions[i].3,
             });
         }
-
     }
 
     fn on_button_press(&mut self, event: &xlib::XEvent) {
@@ -502,6 +588,11 @@ impl WindowManager {
                     key.2(self);
                 }
             }
+            for &key in TAG_KEYS {
+                if key.1 == keysym as c_uint && clean_mask(key_event.state) == key.0 {
+                    key.2(self);
+                }
+            }
         }
     }
 
@@ -535,7 +626,7 @@ impl WindowManager {
         let unmap_event = xlib::XUnmapEvent::from(*event);
         if let Some(c) = self.clients.get_client_by_window(unmap_event.window) {
             if unmap_event.send_event != 0 {
-                c.clone().set_state(WITHDRAWN_STATE);
+                c.clone().set_state(xproto::WITHDRAWN_STATE);
             } else {
                 log!("From unmap notify!");
                 self.set_focus(None);
