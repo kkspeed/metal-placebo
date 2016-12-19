@@ -1,8 +1,6 @@
 extern crate libc;
 extern crate x11;
 
-use std::cell::RefCell;
-use std::ffi::CString;
 use std::io::Write;
 use std::mem::zeroed;
 use std::os::raw::{c_long, c_int, c_uchar, c_uint, c_ulong, c_void};
@@ -12,14 +10,14 @@ use std::rc::Rc;
 
 use x11::{xlib, keysym};
 
+#[macro_use]
+mod util;
+mod atoms;
 mod client;
 
-macro_rules! log(
-    ($($arg:tt)*) => { {
-        let r = writeln!(&mut ::std::io::stderr(), $($arg)*);
-        r.expect("failed printing to stderr");
-    } }
-);
+use atoms::Atoms;
+use client::{ClientL, ClientList, ClientW, Rect};
+use util::{clean_mask, spawn};
 
 const XC_LEFT_PTR: c_uint = 68;
 const WITHDRAWN_STATE: c_ulong = 0;
@@ -28,8 +26,10 @@ const FOCUSED_BORDER_COLOR: &'static str = "RGBi:1.0/0.0/0.0";
 const NORMAL_BORDER_COLOR: &'static str = "RGBi:0.0/1.0/0.0";
 
 const BORDER_WIDTH: c_int = 5;
+const BAR_HEIGHT: c_int = 20;
 
-const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager) -> ())] =
+#[allow(unused_variables)]
+const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))] =
     &[(xlib::Mod1Mask, keysym::XK_r, &|w| spawn("dmenu_run")),
       (xlib::Mod1Mask, keysym::XK_q, &|w| process::exit(0)),
       (xlib::Mod1Mask, keysym::XK_t, &|w| spawn("xterm")),
@@ -48,11 +48,7 @@ const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager) -> ())] =
 
 const TAG_DEFAULT: c_uchar = 1;
 
-fn spawn(command: &str) {
-    process::Command::new(command).spawn();
-}
-
-fn tile(clients: &ClientList,
+fn tile(clients: &ClientL,
         pane_x: c_int,
         pane_y: c_int,
         pane_width: c_int,
@@ -90,103 +86,6 @@ fn tile(clients: &ClientList,
     result
 }
 
-type ClientWindow = Rc<RefCell<Client>>;
-type ClientList = Vec<ClientWindow>;
-
-struct Client {
-    tag: c_uchar,
-    window: c_ulong,
-    old_x: c_int,
-    old_y: c_int,
-    old_width: c_int,
-    old_height: c_int,
-    x: c_int,
-    y: c_int,
-    width: c_int,
-    height: c_int,
-    border: c_int,
-    old_border: c_int,
-    weight: i32,
-}
-
-impl Default for Client {
-    fn default() -> Client {
-        Client {
-            tag: TAG_DEFAULT,
-            window: 0,
-            old_x: -1,
-            old_y: -1,
-            old_width: -1,
-            old_height: -1,
-            x: -1,
-            y: -1,
-            width: -1,
-            height: -1,
-            border: 0,
-            old_border: 0,
-            weight: -1,
-        }
-    }
-}
-
-impl Client {
-    fn new(window: c_ulong) -> Client {
-        Client { window: window, ..Default::default() }
-    }
-
-    fn save_window_size(&mut self) {
-        self.old_x = self.x;
-        self.old_y = self.y;
-        self.old_width = self.width;
-        self.old_height = self.height;
-    }
-
-    fn set_size(&mut self, x: c_int, y: c_int, width: c_int, height: c_int) {
-        self.x = x;
-        self.y = y;
-        self.width = width;
-        self.height = height;
-    }
-}
-
-struct Atoms {
-    wm_protocols: c_ulong,
-    wm_delete: c_ulong,
-    wm_state: c_ulong,
-    wm_take_focus: c_ulong,
-    net_active_window: c_ulong,
-    net_supported: c_ulong,
-    net_wm_name: c_ulong,
-    net_wm_state: c_ulong,
-    net_wm_fullscreen: c_ulong,
-    net_wm_window_type: c_ulong,
-    net_wm_window_type_dialog: c_ulong,
-    net_client_list: c_ulong,
-}
-
-impl Atoms {
-    fn create_atom(display: *mut xlib::Display) -> Atoms {
-        Atoms {
-            wm_protocols: Atoms::intern_atom(display, "WM_PROTOCOLS"),
-            wm_delete: Atoms::intern_atom(display, "WM_DELETE_WINDOW"),
-            wm_state: Atoms::intern_atom(display, "WM_STATE"),
-            wm_take_focus: Atoms::intern_atom(display, "WM_TAKE_FOCUS"),
-            net_active_window: Atoms::intern_atom(display, "_NET_ACTIVE_WINDOW"),
-            net_supported: Atoms::intern_atom(display, "_NET_SUPPORTED"),
-            net_wm_name: Atoms::intern_atom(display, "_NET_SUPPORTED"),
-            net_wm_state: Atoms::intern_atom(display, "_NET_WM_STATE"),
-            net_wm_fullscreen: Atoms::intern_atom(display, "_NET_WM_STATE_FULLSCREEN"),
-            net_wm_window_type: Atoms::intern_atom(display, "_NET_WM_WINDOW_TYPE"),
-            net_wm_window_type_dialog: Atoms::intern_atom(display, "_NET_WM_WINDOW_TYPE_DIALOG"),
-            net_client_list: Atoms::intern_atom(display, "_NET_CLIENT_LIST"),
-        }
-    }
-
-    fn intern_atom(display: *mut xlib::Display, atom: &str) -> c_ulong {
-        unsafe { xlib::XInternAtom(display, CString::new(atom).unwrap().as_ptr(), 0) }
-    }
-}
-
 struct Colors {
     normal_border_color: c_ulong,
     focused_border_color: c_ulong,
@@ -194,13 +93,11 @@ struct Colors {
 
 impl Colors {
     fn new(display: *mut xlib::Display, window: c_ulong) -> Colors {
-        unsafe {
-            let normal_color = Colors::create_color(display, window, NORMAL_BORDER_COLOR);
-            let focused_color = Colors::create_color(display, window, FOCUSED_BORDER_COLOR);
-            Colors {
-                normal_border_color: normal_color.pixel,
-                focused_border_color: focused_color.pixel,
-            }
+        let normal_color = Colors::create_color(display, window, NORMAL_BORDER_COLOR);
+        let focused_color = Colors::create_color(display, window, FOCUSED_BORDER_COLOR);
+        Colors {
+            normal_border_color: normal_color.pixel,
+            focused_border_color: focused_color.pixel,
         }
     }
 
@@ -226,10 +123,10 @@ struct WindowManager {
     root: c_ulong,
     screen_width: c_int,
     screen_height: c_int,
-    atoms: Atoms,
+    atoms: Rc<Atoms>,
     current_tag: c_uchar,
-    current_stack: ClientList,
-    clients: ClientList,
+    current_stack: ClientL,
+    clients: ClientL,
     current_focus: Option<usize>,
     colors: Colors,
 }
@@ -241,7 +138,7 @@ impl WindowManager {
         let root = unsafe { xlib::XRootWindow(display, screen) };
         let width = unsafe { xlib::XDisplayWidth(display, screen) };
         let height = unsafe { xlib::XDisplayHeight(display, screen) };
-        let atoms = Atoms::create_atom(display);
+        let atoms = Rc::new(Atoms::create_atom(display));
         let mut wm = WindowManager {
             display: display,
             screen: screen,
@@ -331,7 +228,7 @@ impl WindowManager {
         }
     }
 
-    fn grab_buttons(&mut self, client: ClientWindow, focused: bool) {
+    fn grab_buttons(&mut self, client: ClientW, focused: bool) {
         unsafe {
             xlib::XUngrabButton(self.display,
                                 xlib::AnyButton as c_uint,
@@ -352,46 +249,7 @@ impl WindowManager {
         }
     }
 
-    fn send_event(&mut self, client: ClientWindow, proto: xlib::Atom) -> bool {
-        let mut exists = false;
-        unsafe {
-            let mut n: c_int = 0;
-            let mut p: *mut xlib::Atom = zeroed();
-            if xlib::XGetWMProtocols(self.display, client.borrow().window, &mut p, &mut n) != 0 {
-                let protocols: &[xlib::Atom] = std::slice::from_raw_parts(p, n as usize);
-                exists = protocols.iter().any(|c| *c == proto);
-                xlib::XFree(p as *mut c_void);
-            }
-            if exists {
-                log!("Send event: {}", proto);
-                let mut ev: xlib::XClientMessageEvent = zeroed();
-                ev.type_ = xlib::ClientMessage; // wtf?
-                ev.window = client.borrow().window;
-                ev.message_type = self.atoms.wm_protocols;
-                ev.format = 32;
-                ev.data.set_long(0, proto as c_long);
-                ev.data.set_long(1, xlib::CurrentTime as c_long);
-                let status = xlib::XSendEvent(self.display,
-                                              client.borrow().window,
-                                              0,
-                                              xlib::NoEventMask,
-                                              &mut xlib::XEvent::from(ev));
-                log!("Status: {}", status);
-            }
-        }
-        exists
-    }
-
-    fn get_client(&mut self, window: c_ulong) -> Option<ClientWindow> {
-        for c in &self.clients {
-            if c.borrow().window == window {
-                return Some(c.clone());
-            }
-        }
-        None
-    }
-
-    fn get_client_index(&self, client: ClientWindow) -> usize {
+    fn get_client_index(&self, client: ClientW) -> usize {
         self.clients
             .iter()
             .position(|n| n.borrow().window == client.borrow().window)
@@ -402,7 +260,7 @@ impl WindowManager {
         unsafe {
             xlib::XDeleteProperty(self.display, self.root, self.atoms.net_client_list);
         }
-        for c in &self.clients {
+        for c in &mut self.clients {
             unsafe {
                 xlib::XChangeProperty(self.display,
                                       self.root,
@@ -432,15 +290,14 @@ impl WindowManager {
 
     fn set_focus(&mut self, i: Option<usize>) {
         if let Some(prev_focused) = self.current_focus {
-            if prev_focused >= self.current_stack.len() {
-                return;
-            }
-            unsafe {
-                let prev_client = self.current_stack[prev_focused].clone();
-                xlib::XSetWindowBorder(self.display,
-                                       prev_client.borrow().window,
-                                       self.colors.normal_border_color);
-                self.grab_buttons(prev_client, false);
+            if prev_focused < self.current_stack.len() {
+                unsafe {
+                    let prev_client = self.current_stack[prev_focused].clone();
+                    xlib::XSetWindowBorder(self.display,
+                                           prev_client.borrow().window,
+                                           self.colors.normal_border_color);
+                    self.grab_buttons(prev_client, false);
+                }
             }
         }
         if let Some(c) = i {
@@ -451,7 +308,6 @@ impl WindowManager {
                                      window,
                                      xlib::RevertToPointerRoot,
                                      xlib::CurrentTime);
-
                 xlib::XChangeProperty(self.display,
                                       self.root,
                                       self.atoms.net_active_window,
@@ -464,8 +320,9 @@ impl WindowManager {
             let client = self.current_stack[c].clone();
             let atom = self.atoms.wm_take_focus;
             self.grab_buttons(client.clone(), true);
-            self.send_event(client, atom);
+            client.send_event(atom);
         }
+        log!("set_focus: executed here.");
         self.current_focus = i;
     }
 
@@ -484,20 +341,14 @@ impl WindowManager {
 
     fn kill_client(&mut self) {
         if let Some(c) = self.current_focus {
-            let client: ClientWindow = self.current_stack[c].clone();
+            let client: ClientW = self.current_stack[c].clone();
             let atom = self.atoms.wm_delete;
-            log!("Killing client");
-            if !self.send_event(client.clone(), atom) {
-                log!("Not succeeded!");
-                unsafe {
-                    xlib::XGrabServer(self.display);
-                    xlib::XSetErrorHandler(Some(xerror_dummy));
+            // TODO: REMOVE client record here already!
+            if !client.send_event(atom) {
+                x_disable_error_unsafe!(self.display, {
                     xlib::XSetCloseDownMode(self.display, xlib::DestroyAll);
                     xlib::XKillClient(self.display, client.borrow().window);
-                    xlib::XSync(self.display, 0);
-                    xlib::XSetErrorHandler(None);
-                    xlib::XUngrabServer(self.display);
-                }
+                });
             }
         }
     }
@@ -505,7 +356,7 @@ impl WindowManager {
     fn zoom(&mut self) {
         if let Some(c) = self.current_focus {
             if c < self.current_stack.len() {
-                let client = self.current_stack[c].clone();
+                let mut client = self.current_stack[c].clone();
                 client.borrow_mut().weight = self.current_stack
                     .iter()
                     .map(|a| a.borrow().weight)
@@ -517,7 +368,7 @@ impl WindowManager {
     }
 
     fn manage_window(&mut self, window: c_ulong, xa: &xlib::XWindowAttributes) {
-        let client = Rc::new(RefCell::new(Client::new(window)));
+        let mut client = ClientW::new(self.display, window, self.current_tag, self.atoms.clone());
         client.borrow_mut().tag = self.current_tag;
         client.borrow_mut().set_size(xa.x, xa.y, xa.width, xa.height);
         client.borrow_mut().save_window_size();
@@ -546,112 +397,49 @@ impl WindowManager {
         self.arrange_windows();
     }
 
-    fn unmanage(&mut self, client: ClientWindow, destroy: bool) {
+    fn unmanage(&mut self, client: ClientW, destroy: bool) {
         let index = self.get_client_index(client.clone());
         if !destroy {
-            unsafe {
-                xlib::XGrabServer(self.display);
-                xlib::XSetErrorHandler(Some(xerror_dummy));
-                self.set_client_state(client.clone(), WITHDRAWN_STATE);
-                xlib::XSync(self.display, 0);
-                xlib::XSetErrorHandler(None);
-                xlib::XUngrabServer(self.display);
-            }
+            x_disable_error_unsafe!(self.display, {
+                client.clone().set_state(WITHDRAWN_STATE);
+            });
         }
         self.clients.remove(index);
         self.update_client_list();
         self.arrange_windows();
     }
 
-    fn resize_client(&mut self,
-                     client: ClientWindow,
-                     x: c_int,
-                     y: c_int,
-                     width: c_int,
-                     height: c_int) {
-        let mut xc: xlib::XWindowChanges = unsafe { zeroed() };
-        client.borrow_mut().save_window_size();
-        client.borrow_mut().set_size(x, y, width, height);
-        xc.x = x;
-        xc.y = y;
-        xc.width = width;
-        xc.height = height;
-        unsafe {
-            xlib::XConfigureWindow(self.display,
-                                   client.borrow().window,
-                                   (xlib::CWX | xlib::CWY | xlib::CWWidth | xlib::CWHeight) as u32,
-                                   &mut xc);
-        }
-    }
-
     fn arrange_windows(&mut self) {
         let tag = self.current_tag;
-        let clients = self.select_clients(tag);
-        self.current_stack = clients;
+        self.current_stack = self.clients
+            .select_clients(&|c| c.tag() == tag,
+                            true,
+                            &|c| c.show(true),
+                            &|c| c.show(false));
         let focus = if self.current_stack.len() > 0 {
+            log!("Set focus to: 0, stack_len: {}", self.current_stack.len());
             Some(0)
         } else {
+            log!("Set focus to: None, stack_len: {}",
+                 self.current_stack.len());
             None
         };
         self.set_focus(focus);
         let positions = tile(&self.current_stack,
                              0,
-                             0,
+                             BAR_HEIGHT,
                              self.screen_width,
-                             self.screen_height);
+                             self.screen_height - BAR_HEIGHT);
         for i in 0..self.current_stack.len() {
-            let client = self.current_stack[i].clone();
-            self.resize_client(client,
-                               positions[i].0,
-                               positions[i].1,
-                               positions[i].2,
-                               positions[i].3);
+            let mut client = self.current_stack[i].clone();
+            client.resize(Rect {
+                x: positions[i].0,
+                y: positions[i].1,
+                width: positions[i].2,
+                height: positions[i].3,
+            });
         }
 
-    }
-
-    fn select_clients(&mut self, tag: c_uchar) -> ClientList {
-        let tag = self.current_tag;
-        let display = self.display;
-        let mut result: ClientList = self.clients
-            .iter()
-            .filter_map(|c| {
-                if c.borrow().tag == tag {
-                    Some(c.clone())
-                } else {
-                    unsafe {
-                        xlib::XMoveWindow(display,
-                                          c.borrow().window,
-                                          c.borrow().width * -2,
-                                          c.borrow().y);
-                    }
-                    None
-                }
-            })
-            .collect();
-
-        for c in &result {
-            unsafe {
-                xlib::XMoveWindow(display, c.borrow().window, c.borrow().x, c.borrow().y);
-            }
-        }
-        result.sort_by_key(|a| -a.borrow().weight);
-        log!("Window length: {}", result.len());
-        result
-    }
-
-    fn set_client_state(&self, client: ClientWindow, state: c_ulong) {
-        let data = vec![state, 0];
-        unsafe {
-            xlib::XChangeProperty(self.display,
-                                  client.borrow().window,
-                                  self.atoms.wm_state,
-                                  self.atoms.wm_state,
-                                  32,
-                                  xlib::PropModeReplace,
-                                  data.as_ptr() as *const c_uchar,
-                                  2);
-        }
     }
 
     fn on_button_press(&mut self, event: &xlib::XEvent) {
@@ -688,7 +476,7 @@ impl WindowManager {
 
     fn on_destroy_notify(&mut self, event: &xlib::XEvent) {
         let destroy_window_event = xlib::XDestroyWindowEvent::from(*event);
-        if let Some(c) = self.get_client(destroy_window_event.window) {
+        if let Some(c) = self.clients.get_client_by_window(destroy_window_event.window) {
             self.unmanage(c.clone(), true);
         }
     }
@@ -729,7 +517,7 @@ impl WindowManager {
                xa.override_redirect != 0 {
                 return;
             }
-            if self.get_client(map_request_event.window).is_none() {
+            if self.clients.get_client_by_window(map_request_event.window).is_none() {
                 self.manage_window(map_request_event.window, &xa);
             }
         }
@@ -740,15 +528,16 @@ impl WindowManager {
     }
 
     fn on_property_notify(&mut self, event: &xlib::XEvent) {
-        log!("[on_property_notify() Not implemented]");
+        // log!("[on_property_notify() Not implemented]");
     }
 
     fn on_unmap_notify(&mut self, event: &xlib::XEvent) {
         let unmap_event = xlib::XUnmapEvent::from(*event);
-        if let Some(c) = self.get_client(unmap_event.window) {
+        if let Some(c) = self.clients.get_client_by_window(unmap_event.window) {
             if unmap_event.send_event != 0 {
-                self.set_client_state(c.clone(), WITHDRAWN_STATE);
+                c.clone().set_state(WITHDRAWN_STATE);
             } else {
+                log!("From unmap notify!");
                 self.set_focus(None);
                 self.unmanage(c.clone(), false);
             }
@@ -763,18 +552,6 @@ impl WindowManager {
             }
         }
     }
-}
-
-extern "C" fn xerror_dummy(display: *mut xlib::Display, event: *mut xlib::XErrorEvent) -> c_int {
-    let e: xlib::XErrorEvent = unsafe { *event };
-    log!("Got error {} from request {}", e.error_code, e.request_code);
-    0
-}
-
-fn clean_mask(keycode: u32) -> u32 {
-    keycode & !xlib::LockMask &
-    (xlib::Mod1Mask | xlib::Mod2Mask | xlib::Mod3Mask | xlib::Mod4Mask | xlib::Mod5Mask |
-     xlib::ShiftMask | xlib::ControlMask)
 }
 
 fn main() {
