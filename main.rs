@@ -86,6 +86,7 @@ const TAG_OVERVIEW: c_uchar = 0 as c_uchar;
 
 const RULES: &'static [(&'static Fn(&ClientW) -> bool, &'static Fn(&mut ClientW))] =
     &[(&|c| c.get_class() == "Gimp", &|c| c.set_floating(true)),
+      (&|c| c.get_class() == "Code", &|c| c.set_floating(true)),
       (&|c| c.is_dialog(), &|c| c.set_floating(true))];
 
 fn tile(clients: &ClientL,
@@ -676,7 +677,7 @@ impl WindowManager {
 
     fn on_client_message(&mut self, event: &xlib::XEvent) {
         if TRACE {
-            log!("[on_client_message]");
+            log!("[on_client_message]: not implemented!");
         }
     }
 
@@ -686,20 +687,30 @@ impl WindowManager {
         }
         let mut xa: xlib::XWindowChanges = unsafe { zeroed() };
         let configure_request_event = xlib::XConfigureRequestEvent::from(*event);
-        xa.x = configure_request_event.x;
-        xa.y = configure_request_event.y;
-        xa.width = configure_request_event.width;
-        xa.height = configure_request_event.height;
-        xa.sibling = configure_request_event.above;
-        xa.stack_mode = configure_request_event.detail;
-        unsafe {
-            xlib::XConfigureWindow(self.display,
-                                   configure_request_event.window,
-                                   configure_request_event.value_mask as c_uint,
-                                   &mut xa);
-            xlib::XSync(self.display, 0);
+        if let Some(mut c) = self.clients.get_client_by_window(configure_request_event.window) {
+            if c.tag() == self.current_tag && c.is_floating() {
+                c.show(true);
+            } else {
+                c.configure();
+            }
+        } else {
+            xa.x = configure_request_event.x;
+            xa.y = configure_request_event.y;
+            xa.width = configure_request_event.width;
+            xa.height = configure_request_event.height;
+            xa.sibling = configure_request_event.above;
+            xa.stack_mode = configure_request_event.detail;
+            unsafe {
+                xlib::XConfigureWindow(self.display,
+                                       configure_request_event.window,
+                                       configure_request_event.value_mask as c_uint,
+                                       &mut xa);
+            }
         }
 
+        unsafe {
+            xlib::XSync(self.display, 0);
+        }
     }
 
     fn on_destroy_notify(&mut self, event: &xlib::XEvent) {
@@ -714,19 +725,19 @@ impl WindowManager {
 
     fn on_enter_notify(&mut self, event: &xlib::XEvent) {
         if TRACE {
-            log!("[on_enter_notify]");
+            log!("[on_enter_notify]: not implemented!");
         }
     }
 
     fn on_expose_notify(&mut self, event: &xlib::XEvent) {
         if TRACE {
-            log!("[on_expose_notify]");
+            log!("[on_expose_notify]: not implemented!");
         }
     }
 
     fn on_focus_in(&mut self, event: &xlib::XEvent) {
         if TRACE {
-            log!("[on_focus_in]");
+            log!("[on_focus_in]: not implemented!");
         }
     }
 
@@ -787,7 +798,8 @@ impl WindowManager {
     fn on_property_notify(&mut self, event: &xlib::XEvent) {
         let property_event = xlib::XPropertyEvent::from(*event);
         if TRACE {
-            log!("[on_property_notify]: w: {}, s: {}, a: {}, r: {}, net_wt: {}, net_active: {}",
+            log!("[on_property_notify]: not implemented; w: {}, s: {}, a: {}, r: {}, net_wt: {}, \
+                  net_active: {}",
                  property_event.window,
                  property_event.state,
                  property_event.atom,

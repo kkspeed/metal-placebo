@@ -232,6 +232,28 @@ impl ClientW {
         }
     }
 
+    pub fn configure(&mut self) {
+        let mut ce: xlib::XConfigureEvent = unsafe { zeroed() };
+        let rect = self.get_rect();
+        ce.type_ = xlib::ConfigureNotify;
+        ce.display = self.display();
+        ce.event = self.window();
+        ce.x = rect.x;
+        ce.y = rect.y;
+        ce.width = rect.width;
+        ce.height = rect.height;
+        ce.border_width = self.borrow().border;
+        ce.above = 0;
+        ce.override_redirect = 0;
+        unsafe {
+            xlib::XSendEvent(self.display(),
+                             self.window(),
+                             0,
+                             xlib::StructureNotifyMask,
+                             &mut xlib::XEvent::from(ce));
+        }
+    }
+
     pub fn set_state(&self, state: c_ulong) {
         let data = vec![state, 0];
         unsafe {
