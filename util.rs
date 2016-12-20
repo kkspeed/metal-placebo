@@ -17,12 +17,14 @@ macro_rules! log(
 macro_rules! x_disable_error_unsafe {
     ( $display: expr, $s: block ) => {
         unsafe {
+            log!("Grab server");
             xlib::XGrabServer($display);
             xlib::XSetErrorHandler(Some(util::xerror_dummy));
             $s
             xlib::XSync($display, 0);
             xlib::XSetErrorHandler(Some(util::xerror));
             xlib::XUngrabServer($display);
+            log!("Ungrab server");
         }
     }
 }
@@ -71,6 +73,7 @@ pub extern "C" fn xerror(dpy: *mut xlib::Display, err: *mut xlib::XErrorEvent) -
        (ee.request_code == xproto::X_GrabButton && ee.error_code == xlib::BadAccess) ||
        (ee.request_code == xproto::X_GrabKey && ee.error_code == xlib::BadAccess) ||
        (ee.request_code == xproto::X_CopyArea && ee.error_code == xlib::BadDrawable) {
+        log!("rswm: error: request code={}, error code={}", ee.request_code, ee.error_code);
         return 0;
     }
     log!("rswm: fatal error: request code={}, error code={}\n",

@@ -3,7 +3,7 @@ extern crate x11;
 
 use std::io::Write;
 use std::mem::zeroed;
-use std::os::raw::{c_long, c_int, c_uchar, c_uint, c_ulong, c_void};
+use std::os::raw::{c_long, c_int, c_uchar, c_uint, c_ulong};
 use std::process;
 use std::ptr::null;
 use std::rc::Rc;
@@ -27,6 +27,11 @@ const BORDER_WIDTH: c_int = 3;
 const OVERVIEW_INSET: c_int = 15;
 const BAR_HEIGHT: c_int = 15;
 
+const WINDOW_MOVE_DELTA: c_int = 15;
+const WINDOW_EXPAND_DELTA: c_int = 10;
+
+const TRACE: bool = true;
+
 #[allow(unused_variables)]
 const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))] =
     &[(xlib::Mod1Mask, keysym::XK_r, &|w| spawn("dmenu_run")),
@@ -35,6 +40,22 @@ const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))] =
       (xlib::Mod1Mask, keysym::XK_j, &|w| w.shift_focus(1)),
       (xlib::Mod1Mask, keysym::XK_k, &|w| w.shift_focus(-1)),
       (xlib::Mod1Mask, keysym::XK_F4, &|w| w.kill_client()),
+      (xlib::Mod1Mask, keysym::XK_Left, &|w| w.shift_window(-WINDOW_MOVE_DELTA, 0)),
+      (xlib::Mod1Mask, keysym::XK_Right, &|w| w.shift_window(WINDOW_MOVE_DELTA, 0)),
+      (xlib::Mod1Mask, keysym::XK_Up, &|w| w.shift_window(0, -WINDOW_MOVE_DELTA)),
+      (xlib::Mod1Mask, keysym::XK_Down, &|w| w.shift_window(0, WINDOW_MOVE_DELTA)),
+      (xlib::Mod1Mask | xlib::ShiftMask,
+       keysym::XK_Up,
+       &|w| w.expand_height(-WINDOW_EXPAND_DELTA)),
+      (xlib::Mod1Mask | xlib::ShiftMask,
+       keysym::XK_Down,
+       &|w| w.expand_height(WINDOW_EXPAND_DELTA)),
+      (xlib::Mod1Mask | xlib::ShiftMask,
+       keysym::XK_Right,
+       &|w| w.expand_width(WINDOW_EXPAND_DELTA)),
+      (xlib::Mod1Mask | xlib::ShiftMask,
+       keysym::XK_Left,
+       &|w| w.expand_width(-WINDOW_EXPAND_DELTA)),
       (xlib::Mod1Mask, keysym::XK_F2, &|w| w.select_tag(TAG_OVERVIEW)),
       (xlib::Mod1Mask,
        keysym::XK_Return,
@@ -54,7 +75,7 @@ const TAG_KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))] =
                   xlib::ShiftMask,
                   ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']);
 
-type LayoutFn = &'static Fn(&ClientL, c_int, c_int, c_int, c_int)
+type LayoutFn = &'static Fn(&ClientL, usize, c_int, c_int, c_int, c_int)
                             -> Vec<(c_int, c_int, c_int, c_int)>;
 
 const TAG_LAYOUT: &'static [(c_uchar, LayoutFn)] = &[('9' as c_uchar, &fullscreen),
@@ -63,7 +84,12 @@ const TAG_LAYOUT: &'static [(c_uchar, LayoutFn)] = &[('9' as c_uchar, &fullscree
 const TAG_DEFAULT: c_uchar = '1' as c_uchar;
 const TAG_OVERVIEW: c_uchar = 0 as c_uchar;
 
+const RULES: &'static [(&'static Fn(&ClientW) -> bool, &'static Fn(&mut ClientW))] =
+    &[(&|c| c.get_class() == "Gimp", &|c| c.set_floating(true)),
+      (&|c| c.is_dialog(), &|c| c.set_floating(true))];
+
 fn tile(clients: &ClientL,
+        floating_len: usize,
         pane_x: c_int,
         pane_y: c_int,
         pane_width: c_int,
@@ -71,7 +97,7 @@ fn tile(clients: &ClientL,
         -> Vec<(c_int, c_int, c_int, c_int)> {
     let mut result =
         vec![(pane_x, pane_y, pane_width - 2 * BORDER_WIDTH, pane_height - 2 * BORDER_WIDTH)];
-    let mut count = clients.len();
+    let mut count = clients.len() - floating_len;
     let mut direction = 1;
     log!("Tiling count: {}", count);
     while count > 1 {
@@ -102,15 +128,17 @@ fn tile(clients: &ClientL,
 }
 
 fn fullscreen(clients: &ClientL,
+              floating_len: usize,
               pane_x: c_int,
               pane_y: c_int,
               pane_width: c_int,
               pane_height: c_int)
               -> Vec<(c_int, c_int, c_int, c_int)> {
-    vec![(pane_x, pane_y, pane_width, pane_height); clients.len()]
+    vec![(pane_x, pane_y, pane_width, pane_height); clients.len() - floating_len]
 }
 
 fn overview(clients: &ClientL,
+            floating_len: usize,
             pane_x: c_int,
             pane_y: c_int,
             pane_width: c_int,
@@ -424,11 +452,81 @@ impl WindowManager {
             let atom = self.atoms.wm_delete;
             // TODO: REMOVE client record here already!
             if !client.send_event(atom) {
+                log!("Force kill!");
                 x_disable_error_unsafe!(self.display, {
                     xlib::XSetCloseDownMode(self.display, xlib::DestroyAll);
                     xlib::XKillClient(self.display, client.borrow().window);
                 });
+                log!("Force kill done!");
             }
+        }
+    }
+
+    fn shift_window(&mut self, delta_x: c_int, delta_y: c_int) {
+        if let Some(index) = self.current_focus {
+            let mut client = self.current_stack[index].clone();
+            if !client.is_floating() {
+                return;
+            }
+            let rect = client.get_rect();
+            let mut target_x = rect.x + delta_x;
+            let mut target_y = rect.y + delta_y;
+            if target_x < 0 {
+                target_x = 0;
+            }
+            if target_x > self.screen_width - rect.width {
+                target_x = self.screen_width - rect.width;
+            }
+            if target_y < 0 {
+                target_y = 0;
+            }
+            if target_y > self.screen_height - rect.height {
+                target_y = self.screen_height - rect.height;
+            }
+            client.move_window(target_x, target_y, true);
+            unsafe {
+                xlib::XSync(self.display, 0);
+            }
+        }
+    }
+
+    fn expand_width(&self, delta: c_int) {
+        if let Some(index) = self.current_focus {
+            let mut client = self.current_stack[index].clone();
+            if !client.is_floating() {
+                return;
+            }
+            let mut rect = client.get_rect();
+            rect.width = delta + rect.width;
+
+            if rect.width > self.screen_width {
+                rect.width = self.screen_width;
+            }
+            if rect.width < 10 {
+                return;
+            }
+            client.resize(rect, false);
+        }
+    }
+
+    fn expand_height(&self, delta: c_int) {
+        if let Some(index) = self.current_focus {
+            let mut client = self.current_stack[index].clone();
+            if !client.is_floating() {
+                return;
+            }
+            let mut rect = client.get_rect();
+            rect.height = delta + rect.height;
+
+            if rect.height > self.screen_height {
+                rect.height = self.screen_height;
+            }
+
+            if rect.height < 10 {
+                return;
+            }
+
+            client.resize(rect, false);
         }
     }
 
@@ -477,6 +575,13 @@ impl WindowManager {
             self.grab_buttons(client.clone(), false);
             xlib::XMapWindow(self.display, window);
         }
+
+        for r in RULES {
+            if r.0(&client) {
+                r.1(&mut client);
+            }
+        }
+
         self.clients.push(client);
         self.arrange_windows();
     }
@@ -509,9 +614,18 @@ impl WindowManager {
             None
         };
         self.set_focus(focus);
+        let floating_windows: ClientL = self.current_stack
+            .iter()
+            .filter_map(|c| if c.is_floating() {
+                Some(c.clone())
+            } else {
+                None
+            })
+            .collect();
         let t = &tile;
         let layout_fn = lookup_layout(tag).unwrap_or(t);
         let positions = layout_fn(&self.current_stack,
+                                  floating_windows.len(),
                                   0,
                                   BAR_HEIGHT,
                                   self.screen_width,
@@ -519,16 +633,39 @@ impl WindowManager {
 
         for i in 0..self.current_stack.len() {
             let mut client = self.current_stack[i].clone();
-            client.resize(Rect {
-                x: positions[i].0,
-                y: positions[i].1,
-                width: positions[i].2,
-                height: positions[i].3,
-            });
+            if self.current_tag == TAG_OVERVIEW {
+                client.resize(Rect {
+                                  x: positions[i].0,
+                                  y: positions[i].1,
+                                  width: positions[i].2,
+                                  height: positions[i].3,
+                              },
+                              true);
+            } else {
+                if !client.is_floating() {
+                    client.resize(Rect {
+                                      x: positions[i].0,
+                                      y: positions[i].1,
+                                      width: positions[i].2,
+                                      height: positions[i].3,
+                                  },
+                                  false);
+                } else {
+                    let rect = client.get_rect();
+                    client.resize(rect, false);
+                    unsafe {
+                        xlib::XRaiseWindow(self.display, client.window());
+                        xlib::XSync(self.display, 0);
+                    }
+                }
+            }
         }
     }
 
     fn on_button_press(&mut self, event: &xlib::XEvent) {
+        if TRACE {
+            log!("[on_button_press]");
+        }
         let button_event = xlib::XButtonPressedEvent::from(*event);
         let position =
             self.current_stack.iter().position(|x| x.borrow().window == button_event.window);
@@ -538,10 +675,15 @@ impl WindowManager {
     }
 
     fn on_client_message(&mut self, event: &xlib::XEvent) {
-        log!("[on_client_message(): Not implemented]");
+        if TRACE {
+            log!("[on_client_message]");
+        }
     }
 
     fn on_configure_request(&mut self, event: &xlib::XEvent) {
+        if TRACE {
+            log!("[on_configure_request]");
+        }
         let mut xa: xlib::XWindowChanges = unsafe { zeroed() };
         let configure_request_event = xlib::XConfigureRequestEvent::from(*event);
         xa.x = configure_request_event.x;
@@ -561,6 +703,9 @@ impl WindowManager {
     }
 
     fn on_destroy_notify(&mut self, event: &xlib::XEvent) {
+        if TRACE {
+            log!("[on_destroy_notify]");
+        }
         let destroy_window_event = xlib::XDestroyWindowEvent::from(*event);
         if let Some(c) = self.clients.get_client_by_window(destroy_window_event.window) {
             self.unmanage(c.clone(), true);
@@ -568,18 +713,27 @@ impl WindowManager {
     }
 
     fn on_enter_notify(&mut self, event: &xlib::XEvent) {
-        log!("[on_enter_notify() Not implemented]");
+        if TRACE {
+            log!("[on_enter_notify]");
+        }
     }
 
     fn on_expose_notify(&mut self, event: &xlib::XEvent) {
-        log!("[on_expose_notify() Not implemented]");
+        if TRACE {
+            log!("[on_expose_notify]");
+        }
     }
 
     fn on_focus_in(&mut self, event: &xlib::XEvent) {
-        log!("[on_focus_in() Not implemented]");
+        if TRACE {
+            log!("[on_focus_in]");
+        }
     }
 
     fn on_key_press(&mut self, event: &xlib::XEvent) {
+        if TRACE {
+            log!("[on_key_press]");
+        }
         unsafe {
             let key_event = xlib::XKeyEvent::from(*event);
             let keysym = xlib::XKeycodeToKeysym(self.display, key_event.keycode as u8, 0);
@@ -597,10 +751,22 @@ impl WindowManager {
     }
 
     fn on_mapping_notify(&mut self, event: &xlib::XEvent) {
-        log!("[on_mapping_notify() Not implemented]");
+        if TRACE {
+            log!("[on_mapping_notify]");
+        }
+        let mut mapping_event = xlib::XMappingEvent::from(*event);
+        unsafe {
+            xlib::XRefreshKeyboardMapping(&mut mapping_event);
+        }
+        if mapping_event.request == xlib::MappingKeyboard {
+            self.grab_keys();
+        }
     }
 
     fn on_map_request(&mut self, event: &xlib::XEvent) {
+        if TRACE {
+            log!("[on_map_request]");
+        }
         unsafe {
             let map_request_event = xlib::XMapRequestEvent::from(*event);
             let mut xa: xlib::XWindowAttributes = zeroed();
@@ -615,14 +781,27 @@ impl WindowManager {
     }
 
     fn on_motion_notify(&mut self, event: &xlib::XEvent) {
-        log!("[on_motion_notify() Not implemented]");
+        // log!("[on_motion_notify() Not implemented]");
     }
 
     fn on_property_notify(&mut self, event: &xlib::XEvent) {
-        // log!("[on_property_notify() Not implemented]");
+        let property_event = xlib::XPropertyEvent::from(*event);
+        if TRACE {
+            log!("[on_property_notify]: w: {}, s: {}, a: {}, r: {}, net_wt: {}, net_active: {}",
+                 property_event.window,
+                 property_event.state,
+                 property_event.atom,
+                 self.root,
+                 self.atoms.net_wm_window_type,
+                 self.atoms.net_active_window);
+            log!("Self Atoms: {:?}", self.atoms.as_ref());
+        }
     }
 
     fn on_unmap_notify(&mut self, event: &xlib::XEvent) {
+        if TRACE {
+            log!("[on_unmap_notify]");
+        }
         let unmap_event = xlib::XUnmapEvent::from(*event);
         if let Some(c) = self.clients.get_client_by_window(unmap_event.window) {
             if unmap_event.send_event != 0 {

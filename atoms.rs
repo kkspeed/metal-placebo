@@ -2,6 +2,7 @@ use std::ffi::CString;
 use std::os::raw::c_ulong;
 use x11::xlib;
 
+#[derive(Debug)]
 pub struct Atoms {
     pub wm_protocols: c_ulong,
     pub wm_delete: c_ulong,

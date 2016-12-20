@@ -1,7 +1,9 @@
 use std::cell::{Ref, RefCell, RefMut};
+use std::ffi::CString;
 use std::io::Write;
 use std::os::raw::{c_long, c_int, c_uchar, c_uint, c_ulong, c_void};
-use std::mem::zeroed;
+use std::mem::{size_of, zeroed};
+use std::ptr::null_mut;
 use std::rc::Rc;
 use std::slice;
 
@@ -29,8 +31,11 @@ impl Default for Rect {
 }
 
 pub struct Client {
-    atoms: Rc<Atoms>,
+    pub atoms: Rc<Atoms>,
     pub tag: c_uchar,
+    class: String,
+    is_floating: bool,
+    is_dialog: bool,
     pub display: *mut xlib::Display,
     pub window: c_ulong,
     pub old_rect: Rect,
@@ -46,6 +51,9 @@ impl Default for Client {
             atoms: unsafe { Rc::new(zeroed()) },
             tag: 0,
             display: unsafe { zeroed() },
+            class: "broken".to_string(),
+            is_floating: false,
+            is_dialog: false,
             window: 0,
             old_rect: Rect::default(),
             rect: Rect::default(),
@@ -62,13 +70,22 @@ impl Client {
                tag: c_uchar,
                atoms: Rc<Atoms>)
                -> Client {
-        Client {
+        let mut class_hint: xlib::XClassHint = unsafe { zeroed() };
+        let mut client = Client {
             display: display,
             window: window,
             tag: tag,
             atoms: atoms,
             ..Default::default()
+        };
+        unsafe {
+            xlib::XGetClassHint(display, window, &mut class_hint);
+            if !class_hint.res_class.is_null() {
+                client.class =
+                    CString::from_raw(class_hint.res_class).to_string_lossy().into_owned();
+            }
         }
+        client
     }
 
     pub fn save_window_size(&mut self) {
@@ -106,6 +123,61 @@ impl ClientW {
         self.0.borrow_mut()
     }
 
+    pub fn get_class(&self) -> String {
+        // TODO: Revisit: unnecessary clone.
+        self.borrow().class.clone()
+    }
+
+    pub fn is_floating(&self) -> bool {
+        self.borrow().is_floating
+    }
+
+    pub fn atoms(&self) -> Rc<Atoms> {
+        self.borrow().atoms.clone()
+    }
+
+    pub fn is_dialog(&self) -> bool {
+        if let Some(atom) = self.get_atom(self.borrow().atoms.net_wm_window_type) {
+            atom == self.borrow().atoms.net_wm_window_type_dialog
+        } else {
+            false
+        }
+    }
+
+    pub fn get_atom(&self, atom: xlib::Atom) -> Option<xlib::Atom> {
+        let mut da: xlib::Atom = 0;
+        let mut di: c_int = 0;
+        let mut dl: c_ulong = 0;
+        let mut c: *mut c_uchar = null_mut();
+        unsafe {
+            let ret = xlib::XGetWindowProperty(self.display(),
+                                               self.window(),
+                                               atom,
+                                               0,
+                                               size_of::<xlib::Atom>() as c_long,
+                                               0,
+                                               xlib::XA_ATOM,
+                                               &mut da,
+                                               &mut di,
+                                               &mut dl,
+                                               &mut dl,
+                                               &mut c);
+            if ret == xlib::Success as c_int && !c.is_null() {
+                log!("Success atom!");
+                let result = *(c as *mut xlib::Atom);
+                log!("Success deref!");
+                xlib::XFree(c as *mut c_void);
+                log!("Return!");
+                return Some(result);
+            }
+            None
+        }
+    }
+
+    pub fn set_floating(&mut self, floating: bool) {
+        self.borrow_mut().is_floating = floating;
+    }
+
     pub fn display(&self) -> *mut xlib::Display {
         self.borrow().display
     }
@@ -141,9 +213,11 @@ impl ClientW {
         }
     }
 
-    pub fn resize(&mut self, rect: Rect) {
-        self.borrow_mut().save_window_size();
-        self.borrow_mut().set_size(rect.x, rect.y, rect.width, rect.height);
+    pub fn resize(&mut self, rect: Rect, temporary: bool) {
+        if !temporary {
+            self.borrow_mut().save_window_size();
+            self.borrow_mut().set_size(rect.x, rect.y, rect.width, rect.height);
+        }
         let mut xc: xlib::XWindowChanges = unsafe { zeroed() };
         xc.x = rect.x;
         xc.y = rect.y;
@@ -154,6 +228,7 @@ impl ClientW {
                                    self.window(),
                                    (xlib::CWX | xlib::CWY | xlib::CWWidth | xlib::CWHeight) as u32,
                                    &mut xc);
+            xlib::XSync(self.display(), 0);
         }
     }
 
@@ -230,7 +305,7 @@ impl ClientList for ClientL {
     }
 
     fn rank(&mut self) {
-        self.sort_by_key(|c| (c.tag(), -c.borrow().weight));
+        self.sort_by_key(|c| (c.tag(), c.is_floating(), -c.borrow().weight));
     }
 
     fn show(&mut self) {
