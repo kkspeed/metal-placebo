@@ -37,8 +37,8 @@ const LOGGER_CONFIG: &'static util::LoggerConfig = &util::LoggerConfig {
     selected_tag_color: "#00FF00",
     tag_color: "#FFFFFF",
     separator_color: "#000000",
-    selected_client_color: "#FFFFFF",
-    client_color: "#00FF00",
+    selected_client_color: "#FFFF00",
+    client_color: "#FFFFFF",
 };
 
 #[allow(unused_variables)]
@@ -575,6 +575,7 @@ impl WindowManager {
             self.current_tag
         };
         let mut client = ClientW::new(self.display, window, self.current_tag, self.atoms.clone());
+        client.update_title();
         client.borrow_mut().tag = tag;
         client.borrow_mut().set_size(xa.x, xa.y, xa.width, xa.height);
         client.borrow_mut().save_window_size();
@@ -821,16 +822,27 @@ impl WindowManager {
 
     fn on_property_notify(&mut self, event: &xlib::XEvent) {
         let property_event = xlib::XPropertyEvent::from(*event);
-        if TRACE {
-            log!("[on_property_notify]: not implemented; w: {}, s: {}, a: {}, r: {}, net_wt: {}, \
-                  net_active: {}",
-                 property_event.window,
-                 property_event.state,
-                 property_event.atom,
-                 self.root,
-                 self.atoms.net_wm_window_type,
-                 self.atoms.net_active_window);
-            log!("Self Atoms: {:?}", self.atoms.as_ref());
+        // if TRACE {
+        // log!("[on_property_notify]: not implemented; w: {}, s: {}, a: {}, r: {}, net_wt: {}, \
+        // net_active: {}",
+        // property_event.window,
+        // property_event.state,
+        // property_event.atom,
+        // self.root,
+        // self.atoms.net_wm_window_type,
+        // self.atoms.net_active_window);
+        // log!("Self Atoms: {:?}", self.atoms.as_ref());
+        // }
+        //
+        if let Some(c) = self.clients.get_client_by_window(property_event.window) {
+            if property_event.atom == xlib::XA_WM_NAME ||
+               property_event.atom == self.atoms.net_wm_name {
+                c.clone().update_title();
+                self.logger.dump(&self.clients,
+                                 self.current_tag,
+                                 &self.current_stack,
+                                 &self.current_focus);
+            }
         }
     }
 

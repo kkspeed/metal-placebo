@@ -1,7 +1,7 @@
 use std::cell::{Ref, RefCell, RefMut};
 use std::ffi::CString;
 use std::io::Write;
-use std::os::raw::{c_long, c_int, c_uchar, c_uint, c_ulong, c_void};
+use std::os::raw::{c_long, c_int, c_uchar, c_uint, c_ulong, c_void, c_char};
 use std::mem::{size_of, zeroed};
 use std::ptr::null_mut;
 use std::rc::Rc;
@@ -10,6 +10,7 @@ use std::slice;
 use x11::xlib;
 
 use atoms::Atoms;
+use util;
 
 #[derive(Clone)]
 pub struct Rect {
@@ -33,6 +34,7 @@ impl Default for Rect {
 pub struct Client {
     pub atoms: Rc<Atoms>,
     pub tag: c_uchar,
+    pub title: String,
     class: String,
     is_floating: bool,
     is_dialog: bool,
@@ -50,6 +52,7 @@ impl Default for Client {
         Client {
             atoms: unsafe { Rc::new(zeroed()) },
             tag: 0,
+            title: "broken".to_string(),
             display: unsafe { zeroed() },
             class: "broken".to_string(),
             is_floating: false,
@@ -121,6 +124,17 @@ impl ClientW {
 
     pub fn borrow_mut(&mut self) -> RefMut<Client> {
         self.0.borrow_mut()
+    }
+
+    pub fn get_title(&self) -> String {
+        self.borrow().title.clone()
+    }
+
+    pub fn update_title(&mut self) {
+        self.borrow_mut().title =
+            util::get_text_prop(self.display(), self.window(), self.atoms().net_wm_name)
+                .or(util::get_text_prop(self.display(), self.window(), xlib::XA_WM_NAME))
+                .unwrap_or("Unknown".to_string());
     }
 
     pub fn get_class(&self) -> String {

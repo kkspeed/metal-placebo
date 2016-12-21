@@ -1,5 +1,7 @@
+use std::ffi::CString;
 use std::io::Write;
-use std::os::raw::{c_int, c_uchar};
+use std::os::raw::{c_char, c_int, c_uchar, c_void};
+use std::mem::zeroed;
 use std::process;
 
 use x11::xlib;
@@ -63,6 +65,21 @@ impl Logger for XMobarLogger {
             }
         }
 
+        result += " :: ";
+        let mut index = 99999;
+        if let &Some(ref i) = focus {
+            index = *i;
+        }
+
+        let mut color;
+        for i in 0..current_stack.len() {
+            if i == index {
+                color = self.config.selected_client_color;
+            } else {
+                color = self.config.client_color;
+            }
+            result += &format!("[<fc={}>{1:.5}</fc>] ", color, current_stack[i].get_title());
+        }
         writeln!(self.child_stdin, "{}", result).unwrap();
     }
 }
@@ -110,6 +127,44 @@ pub extern "C" fn xerror_dummy(display: *mut xlib::Display,
          e.error_code,
          e.request_code);
     0
+}
+
+pub fn get_text_prop(display: *mut xlib::Display,
+                     window: xlib::Window,
+                     atom: xlib::Atom)
+                     -> Option<String> {
+    let mut list: *mut (*mut c_char) = unsafe { zeroed() };
+    let mut name: xlib::XTextProperty = unsafe { zeroed() };
+    let mut n: c_int = 0;
+    let mut result = None;
+    unsafe {
+        xlib::XGetTextProperty(display, window, &mut name, atom);
+        if name.nitems == 0 {
+            return None;
+        }
+        if name.encoding == xlib::XA_STRING {
+            log!("Get string");
+            let st = CString::from_raw(name.value as *mut c_char)
+                .to_string_lossy()
+                .to_string();
+            log!("Length: {} - {}", st.len(), st);
+            result = Some(st);
+            log!("Get string done");
+        } else {
+            if xlib::Xutf8TextPropertyToTextList(display, &mut name, &mut list, &mut n) >=
+               xlib::Success as c_int && n > 0 && !(*list).is_null() {
+                log!("Get text list!");
+                let st = CString::from_raw(*list).to_string_lossy().to_string();
+                log!("Text list length: {}", st.len());
+                result = Some(st);
+                // xlib::XFreeStringList(list);
+            }
+        }
+        // TODO: Possible memory leak.
+        // xlib::XFree(name.value as *mut c_void);
+        log!("Free done!");
+    }
+    result
 }
 
 pub fn clean_mask(keycode: u32) -> u32 {
