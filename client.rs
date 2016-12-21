@@ -297,6 +297,12 @@ impl ClientW {
         }
         exists
     }
+
+    pub fn raise_window(&self) {
+        unsafe {
+            xlib::XRaiseWindow(self.display(), self.window());
+        }
+    }
 }
 
 

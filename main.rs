@@ -3,7 +3,7 @@ extern crate x11;
 
 use std::io::Write;
 use std::mem::zeroed;
-use std::os::raw::{c_long, c_int, c_uchar, c_uint, c_ulong};
+use std::os::raw::{c_int, c_uchar, c_uint, c_ulong};
 use std::process;
 use std::ptr::null;
 use std::rc::Rc;
@@ -18,7 +18,7 @@ mod xproto;
 
 use atoms::Atoms;
 use client::{ClientL, ClientList, ClientW, Rect};
-use util::{clean_mask, spawn};
+use util::{clean_mask, spawn, Logger};
 
 const FOCUSED_BORDER_COLOR: &'static str = "RGBi:0.0/1.0/1.0";
 const NORMAL_BORDER_COLOR: &'static str = "RGBi:0.0/0.3/0.3";
@@ -31,6 +31,15 @@ const WINDOW_MOVE_DELTA: c_int = 15;
 const WINDOW_EXPAND_DELTA: c_int = 10;
 
 const TRACE: bool = true;
+
+type MyLogger = util::XMobarLogger;
+const LOGGER_CONFIG: &'static util::LoggerConfig = &util::LoggerConfig {
+    selected_tag_color: "#00FF00",
+    tag_color: "#FFFFFF",
+    separator_color: "#000000",
+    selected_client_color: "#FFFFFF",
+    client_color: "#00FF00",
+};
 
 #[allow(unused_variables)]
 const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))] =
@@ -225,6 +234,7 @@ struct WindowManager {
     clients: ClientL,
     current_focus: Option<usize>,
     colors: Colors,
+    logger: MyLogger,
 }
 
 impl WindowManager {
@@ -247,6 +257,7 @@ impl WindowManager {
             current_focus: None,
             clients: Vec::new(),
             colors: Colors::new(display, root),
+            logger: MyLogger::new(&LOGGER_CONFIG),
         };
 
         let net_atom_list = vec![wm.atoms.net_active_window,
@@ -281,6 +292,10 @@ impl WindowManager {
                                           &mut xattr);
             xlib::XSelectInput(display, root, xattr.event_mask);
         }
+        wm.logger.dump(&wm.clients,
+                       wm.current_tag,
+                       &wm.current_stack,
+                       &wm.current_focus);
         wm.grab_keys();
         wm
     }
@@ -393,6 +408,10 @@ impl WindowManager {
         self.current_tag = tag;
         self.set_focus(None);
         self.arrange_windows();
+        self.logger.dump(&self.clients,
+                         self.current_tag,
+                         &self.current_stack,
+                         &self.current_focus);
     }
 
     fn set_focus(&mut self, i: Option<usize>) {
@@ -423,15 +442,19 @@ impl WindowManager {
                                       xlib::PropModeReplace,
                                       &window as *const u64 as *const u8,
                                       1);
-                xlib::XRaiseWindow(self.display, window);
             }
             let client = self.current_stack[c].clone();
+            client.raise_window();
             let atom = self.atoms.wm_take_focus;
             self.grab_buttons(client.clone(), true);
             client.send_event(atom);
         }
         log!("set_focus: executed here.");
         self.current_focus = i;
+        self.logger.dump(&self.clients,
+                         self.current_tag,
+                         &self.current_stack,
+                         &self.current_focus);
     }
 
     fn shift_focus(&mut self, inc: c_int) {
@@ -583,8 +606,9 @@ impl WindowManager {
             }
         }
 
-        self.clients.push(client);
+        self.clients.push(client.clone());
         self.arrange_windows();
+        client.raise_window();
     }
 
     fn unmanage(&mut self, client: ClientW, destroy: bool) {
@@ -655,7 +679,7 @@ impl WindowManager {
                     let rect = client.get_rect();
                     client.resize(rect, false);
                     unsafe {
-                        xlib::XRaiseWindow(self.display, client.window());
+                        client.raise_window();
                         xlib::XSync(self.display, 0);
                     }
                 }

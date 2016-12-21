@@ -1,9 +1,71 @@
 use std::io::Write;
-use std::os::raw::c_int;
+use std::os::raw::{c_int, c_uchar};
 use std::process;
 
 use x11::xlib;
 use xproto;
+
+use client::{ClientL, ClientW};
+
+pub struct LoggerConfig {
+    pub selected_tag_color: &'static str,
+    pub tag_color: &'static str,
+    pub separator_color: &'static str,
+    pub selected_client_color: &'static str,
+    pub client_color: &'static str,
+}
+
+pub trait Logger {
+    fn new(config: &'static LoggerConfig) -> Self;
+    fn dump(&mut self,
+            all_clients: &ClientL,
+            current_tag: c_uchar,
+            current_stack: &ClientL,
+            focus: &Option<usize>);
+}
+
+pub struct XMobarLogger {
+    config: &'static LoggerConfig,
+    child_stdin: process::ChildStdin,
+}
+
+impl Logger for XMobarLogger {
+    fn new(config: &'static LoggerConfig) -> XMobarLogger {
+        let process::Child { stdin: child_stdin, .. } = process::Command::new("xmobar")
+            .stdin(process::Stdio::piped())
+            .spawn()
+            .expect("cannot spawn xmobar");
+        XMobarLogger {
+            config: config,
+            child_stdin: child_stdin.unwrap(),
+        }
+    }
+
+    fn dump(&mut self,
+            all_clients: &ClientL,
+            current_tag: c_uchar,
+            current_stack: &ClientL,
+            focus: &Option<usize>) {
+        let mut tags: Vec<char> = all_clients.iter().map(|c| c.tag() as char).collect();
+        tags.push(current_tag as char);
+        tags.sort();
+        tags.dedup();
+        let mut result = String::new();
+        for t in &tags {
+            if *t == current_tag as char {
+                if current_tag == 0 {
+                    result += &format!("<fc={}> Overview </fc> |", self.config.selected_tag_color);
+                } else {
+                    result += &format!("<fc={}> {} </fc> |", self.config.selected_tag_color, t);
+                }
+            } else {
+                result += &format!("<fc={}> {} </fc> |", self.config.tag_color, t);
+            }
+        }
+
+        writeln!(self.child_stdin, "{}", result).unwrap();
+    }
+}
 
 #[macro_export]
 macro_rules! log(
@@ -56,9 +118,8 @@ pub fn clean_mask(keycode: u32) -> u32 {
      xlib::ShiftMask | xlib::ControlMask)
 }
 
-#[allow(unused_must_use)]
 pub fn spawn(command: &str) {
-    process::Command::new(command).spawn();
+    process::Command::new(command).spawn().unwrap();
 }
 
 #[allow(unused_variables)]
