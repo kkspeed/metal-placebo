@@ -115,6 +115,7 @@ fn tile(clients: &ClientL,
     log!("Tiling count: {}", count);
     while count > 1 {
         let (last_x, last_y, last_width, last_height) = result.pop().unwrap();
+        let r = (last_x, last_y, last_width, last_height);
         if direction == 1 {
             // Horizontal split
             let p1 = (last_x, last_y, last_width / 2 - BORDER_WIDTH, last_height);
@@ -122,8 +123,13 @@ fn tile(clients: &ClientL,
                       last_y,
                       last_width / 2 - BORDER_WIDTH,
                       last_height);
-            result.push(p1);
-            result.push(p2);
+            if p1.2 < 0 {
+                result.push(r.clone());
+                result.push(r);
+            } else {
+                result.push(p1);
+                result.push(p2);
+            }
         } else {
             // Vertical split
             let p2 = (last_x,
@@ -131,8 +137,13 @@ fn tile(clients: &ClientL,
                       last_width,
                       last_height / 2 - BORDER_WIDTH);
             let p1 = (last_x, last_y, last_width, last_height / 2 - BORDER_WIDTH);
-            result.push(p1);
-            result.push(p2);
+            if p2.3 < 0 {
+                result.push(r.clone());
+                result.push(r);
+            } else {
+                result.push(p1);
+                result.push(p2);
+            }
         }
         direction = direction ^ 1;
         count = count - 1;
