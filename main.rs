@@ -98,6 +98,8 @@ const RULES: &'static [(&'static Fn(&ClientW) -> bool, &'static Fn(&mut ClientW)
       (&|c| c.is_dialog(), &|c| c.set_floating(true)),
       (&|c| c.get_class() == "Tilda", &|c| c.set_floating(true))];
 
+const START_PROGRAMS: &'static [&'static Fn()] = &[&|| spawn("xcompmgr"), &|| spawn("fcitx")];
+
 fn tile(clients: &ClientL,
         floating_len: usize,
         pane_x: c_int,
@@ -836,6 +838,9 @@ impl WindowManager {
     }
 
     fn run(&mut self) {
+        for prog in START_PROGRAMS {
+            prog();
+        }
         unsafe {
             let mut event: xlib::XEvent = zeroed();
             while xlib::XNextEvent(self.display, &mut event) == 0 {
