@@ -6,7 +6,6 @@ version = "0.0.0"
 libc = "*"
 
 [dependencies.x11]
-path = "../x11"
 features = ["xlib", "xinput"]
 
 [[bin]]
