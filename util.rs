@@ -92,6 +92,14 @@ macro_rules! log(
     } }
 );
 
+macro_rules! trace(
+    ($($arg:tt)*) => { {
+        if TRACE {
+            log!($($arg)*);
+        }
+    } }
+);
+
 #[macro_export]
 macro_rules! x_disable_error_unsafe {
     ( $display: expr, $s: block ) => {

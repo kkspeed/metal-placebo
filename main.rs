@@ -95,8 +95,8 @@ const TAG_OVERVIEW: c_uchar = 0 as c_uchar;
 
 const RULES: &'static [(&'static Fn(&ClientW) -> bool, &'static Fn(&mut ClientW))] =
     &[(&|c| c.get_class() == "Gimp", &|c| c.set_floating(true)),
-      (&|c| c.get_class() == "Code", &|c| c.set_floating(true)),
-      (&|c| c.is_dialog(), &|c| c.set_floating(true))];
+      (&|c| c.is_dialog(), &|c| c.set_floating(true)),
+      (&|c| c.get_class() == "Tilda", &|c| c.set_floating(true))];
 
 fn tile(clients: &ClientL,
         floating_len: usize,
@@ -144,7 +144,8 @@ fn fullscreen(clients: &ClientL,
               pane_width: c_int,
               pane_height: c_int)
               -> Vec<(c_int, c_int, c_int, c_int)> {
-    vec![(pane_x, pane_y, pane_width, pane_height); clients.len() - floating_len]
+    vec![(pane_x , pane_y , pane_width - BORDER_WIDTH, pane_height - BORDER_WIDTH); 
+        clients.len() - floating_len]
 }
 
 fn overview(clients: &ClientL,
@@ -430,10 +431,6 @@ impl WindowManager {
             unsafe {
                 let window = self.current_stack[c].borrow().window;
                 xlib::XSetWindowBorder(self.display, window, self.colors.focused_border_color);
-                xlib::XSetInputFocus(self.display,
-                                     window,
-                                     xlib::RevertToPointerRoot,
-                                     xlib::CurrentTime);
                 xlib::XChangeProperty(self.display,
                                       self.root,
                                       self.atoms.net_active_window,
@@ -442,6 +439,10 @@ impl WindowManager {
                                       xlib::PropModeReplace,
                                       &window as *const u64 as *const u8,
                                       1);
+                xlib::XSetInputFocus(self.display,
+                                     window,
+                                     xlib::RevertToPointerRoot,
+                                     xlib::CurrentTime);
             }
             let client = self.current_stack[c].clone();
             client.raise_window();
@@ -610,6 +611,9 @@ impl WindowManager {
         self.clients.push(client.clone());
         self.arrange_windows();
         client.raise_window();
+        if let Some(index) = self.current_stack.iter().position(|c| c.window() == client.window()) {
+            self.set_focus(Some(index));
+        }
     }
 
     fn unmanage(&mut self, client: ClientW, destroy: bool) {
@@ -689,9 +693,7 @@ impl WindowManager {
     }
 
     fn on_button_press(&mut self, event: &xlib::XEvent) {
-        if TRACE {
-            log!("[on_button_press]");
-        }
+        trace!("[on_button_press]");
         let button_event = xlib::XButtonPressedEvent::from(*event);
         let position =
             self.current_stack.iter().position(|x| x.borrow().window == button_event.window);
@@ -701,15 +703,11 @@ impl WindowManager {
     }
 
     fn on_client_message(&mut self, event: &xlib::XEvent) {
-        if TRACE {
-            log!("[on_client_message]: not implemented!");
-        }
+        trace!("[on_client_message]: not implemented!");
     }
 
     fn on_configure_request(&mut self, event: &xlib::XEvent) {
-        if TRACE {
-            log!("[on_configure_request]");
-        }
+        trace!("[on_configure_request]");
         let mut xa: xlib::XWindowChanges = unsafe { zeroed() };
         let configure_request_event = xlib::XConfigureRequestEvent::from(*event);
         if let Some(mut c) = self.clients.get_client_by_window(configure_request_event.window) {
@@ -739,9 +737,7 @@ impl WindowManager {
     }
 
     fn on_destroy_notify(&mut self, event: &xlib::XEvent) {
-        if TRACE {
-            log!("[on_destroy_notify]");
-        }
+        trace!("[on_destroy_notify]");
         let destroy_window_event = xlib::XDestroyWindowEvent::from(*event);
         if let Some(c) = self.clients.get_client_by_window(destroy_window_event.window) {
             self.unmanage(c.clone(), true);
@@ -749,27 +745,21 @@ impl WindowManager {
     }
 
     fn on_enter_notify(&mut self, event: &xlib::XEvent) {
-        if TRACE {
-            log!("[on_enter_notify]: not implemented!");
-        }
+        trace!("[on_enter_notify]: not implemented!");
     }
 
     fn on_expose_notify(&mut self, event: &xlib::XEvent) {
-        if TRACE {
-            log!("[on_expose_notify]: not implemented!");
-        }
+        trace!("[on_expose_notify]: not implemented!");
     }
 
     fn on_focus_in(&mut self, event: &xlib::XEvent) {
-        if TRACE {
-            log!("[on_focus_in]: not implemented!");
-        }
+        trace!("[on_focus_in]");
+        let focus = self.current_focus;
+        self.set_focus(focus);
     }
 
     fn on_key_press(&mut self, event: &xlib::XEvent) {
-        if TRACE {
-            log!("[on_key_press]");
-        }
+        trace!("[on_key_press]");
         unsafe {
             let key_event = xlib::XKeyEvent::from(*event);
             let keysym = xlib::XKeycodeToKeysym(self.display, key_event.keycode as u8, 0);
@@ -787,9 +777,7 @@ impl WindowManager {
     }
 
     fn on_mapping_notify(&mut self, event: &xlib::XEvent) {
-        if TRACE {
-            log!("[on_mapping_notify]");
-        }
+        trace!("[on_mapping_notify]");
         let mut mapping_event = xlib::XMappingEvent::from(*event);
         unsafe {
             xlib::XRefreshKeyboardMapping(&mut mapping_event);
@@ -800,9 +788,7 @@ impl WindowManager {
     }
 
     fn on_map_request(&mut self, event: &xlib::XEvent) {
-        if TRACE {
-            log!("[on_map_request]");
-        }
+        trace!("[on_map_request]");
         unsafe {
             let map_request_event = xlib::XMapRequestEvent::from(*event);
             let mut xa: xlib::XWindowAttributes = zeroed();
@@ -821,19 +807,8 @@ impl WindowManager {
     }
 
     fn on_property_notify(&mut self, event: &xlib::XEvent) {
+        trace!("[on_property_notify]");
         let property_event = xlib::XPropertyEvent::from(*event);
-        // if TRACE {
-        // log!("[on_property_notify]: not implemented; w: {}, s: {}, a: {}, r: {}, net_wt: {}, \
-        // net_active: {}",
-        // property_event.window,
-        // property_event.state,
-        // property_event.atom,
-        // self.root,
-        // self.atoms.net_wm_window_type,
-        // self.atoms.net_active_window);
-        // log!("Self Atoms: {:?}", self.atoms.as_ref());
-        // }
-        //
         if let Some(c) = self.clients.get_client_by_window(property_event.window) {
             if property_event.atom == xlib::XA_WM_NAME ||
                property_event.atom == self.atoms.net_wm_name {
@@ -847,9 +822,7 @@ impl WindowManager {
     }
 
     fn on_unmap_notify(&mut self, event: &xlib::XEvent) {
-        if TRACE {
-            log!("[on_unmap_notify]");
-        }
+        trace!("[on_unmap_notify]");
         let unmap_event = xlib::XUnmapEvent::from(*event);
         if let Some(c) = self.clients.get_client_by_window(unmap_event.window) {
             if unmap_event.send_event != 0 {
