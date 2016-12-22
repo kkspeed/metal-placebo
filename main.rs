@@ -43,9 +43,9 @@ const LOGGER_CONFIG: &'static util::LoggerConfig = &util::LoggerConfig {
 
 #[allow(unused_variables)]
 const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))] =
-    &[(xlib::Mod1Mask, keysym::XK_r, &|w| spawn("dmenu_run")),
+    &[(xlib::Mod1Mask, keysym::XK_r, &|w| spawn("dmenu_run", &[])),
       (xlib::Mod1Mask, keysym::XK_q, &|w| process::exit(0)),
-      (xlib::Mod1Mask, keysym::XK_t, &|w| spawn("xterm")),
+      (xlib::Mod1Mask, keysym::XK_t, &|w| spawn("xterm", &[])),
       (xlib::Mod1Mask, keysym::XK_j, &|w| w.shift_focus(1)),
       (xlib::Mod1Mask, keysym::XK_k, &|w| w.shift_focus(-1)),
       (xlib::Mod1Mask, keysym::XK_F4, &|w| w.kill_client()),
@@ -98,7 +98,8 @@ const RULES: &'static [(&'static Fn(&ClientW) -> bool, &'static Fn(&mut ClientW)
       (&|c| c.is_dialog(), &|c| c.set_floating(true)),
       (&|c| c.get_class() == "Tilda", &|c| c.set_floating(true))];
 
-const START_PROGRAMS: &'static [&'static Fn()] = &[&|| spawn("xcompmgr"), &|| spawn("fcitx")];
+const START_PROGRAMS: &'static [&'static Fn()] =
+    &[&|| spawn("xcompmgr", &[]), &|| spawn("fcitx", &[]), &|| spawn("tilda", &["--hidden"])];
 
 fn tile(clients: &ClientL,
         floating_len: usize,
@@ -420,39 +421,19 @@ impl WindowManager {
     fn set_focus(&mut self, i: Option<usize>) {
         if let Some(prev_focused) = self.current_focus {
             if prev_focused < self.current_stack.len() {
-                unsafe {
-                    let prev_client = self.current_stack[prev_focused].clone();
-                    xlib::XSetWindowBorder(self.display,
-                                           prev_client.borrow().window,
-                                           self.colors.normal_border_color);
-                    self.grab_buttons(prev_client, false);
-                }
+                let prev_client = self.current_stack[prev_focused].clone();
+                prev_client.focus(false);
+                self.grab_buttons(prev_client, false);
             }
         }
         if let Some(c) = i {
-            unsafe {
-                let window = self.current_stack[c].borrow().window;
-                xlib::XSetWindowBorder(self.display, window, self.colors.focused_border_color);
-                xlib::XChangeProperty(self.display,
-                                      self.root,
-                                      self.atoms.net_active_window,
-                                      xlib::XA_WINDOW,
-                                      32,
-                                      xlib::PropModeReplace,
-                                      &window as *const u64 as *const u8,
-                                      1);
-                xlib::XSetInputFocus(self.display,
-                                     window,
-                                     xlib::RevertToPointerRoot,
-                                     xlib::CurrentTime);
-            }
             let client = self.current_stack[c].clone();
+            client.focus(true);
             client.raise_window();
             let atom = self.atoms.wm_take_focus;
             self.grab_buttons(client.clone(), true);
             client.send_event(atom);
         }
-        log!("set_focus: executed here.");
         self.current_focus = i;
         self.logger.dump(&self.clients,
                          self.current_tag,
@@ -577,11 +558,17 @@ impl WindowManager {
         } else {
             self.current_tag
         };
-        let mut client = ClientW::new(self.display, window, self.current_tag, self.atoms.clone());
+        let mut client = ClientW::new(self.display,
+                                      self.root,
+                                      window,
+                                      self.current_tag,
+                                      self.atoms.clone());
         client.update_title();
         client.borrow_mut().tag = tag;
         client.borrow_mut().set_size(xa.x, xa.y, xa.width, xa.height);
         client.borrow_mut().save_window_size();
+        client.set_border_color(self.colors.normal_border_color,
+                                self.colors.focused_border_color);
         unsafe {
             xlib::XChangeProperty(self.display,
                                   self.root,

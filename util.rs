@@ -181,8 +181,11 @@ pub fn clean_mask(keycode: u32) -> u32 {
      xlib::ShiftMask | xlib::ControlMask)
 }
 
-pub fn spawn(command: &str) {
-    process::Command::new(command).spawn().unwrap();
+pub fn spawn(command: &str, args: &[&str]) {
+    match process::Command::new(command).args(args).spawn() {
+        Ok(_) => (),
+        Err(s) => log!("Fail to spawn process {}, error: {}", command, s),
+    }
 }
 
 #[allow(unused_variables)]

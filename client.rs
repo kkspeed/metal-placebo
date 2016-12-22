@@ -35,9 +35,12 @@ pub struct Client {
     pub atoms: Rc<Atoms>,
     pub tag: c_uchar,
     pub title: String,
+    root: xlib::Window,
     class: String,
     is_floating: bool,
     is_dialog: bool,
+    normal_border_color: c_ulong,
+    focused_border_color: c_ulong,
     pub display: *mut xlib::Display,
     pub window: c_ulong,
     pub old_rect: Rect,
@@ -54,9 +57,12 @@ impl Default for Client {
             tag: 0,
             title: "broken".to_string(),
             display: unsafe { zeroed() },
+            root: 0,
             class: "broken".to_string(),
             is_floating: false,
             is_dialog: false,
+            focused_border_color: 0,
+            normal_border_color: 0,
             window: 0,
             old_rect: Rect::default(),
             rect: Rect::default(),
@@ -69,6 +75,7 @@ impl Default for Client {
 
 impl Client {
     pub fn new(display: *mut xlib::Display,
+               root: xlib::Window,
                window: c_ulong,
                tag: c_uchar,
                atoms: Rc<Atoms>)
@@ -76,6 +83,7 @@ impl Client {
         let mut class_hint: xlib::XClassHint = unsafe { zeroed() };
         let mut client = Client {
             display: display,
+            root: root,
             window: window,
             tag: tag,
             atoms: atoms,
@@ -111,11 +119,12 @@ pub type ClientL = Vec<ClientW>;
 
 impl ClientW {
     pub fn new(display: *mut xlib::Display,
+               root: xlib::Window,
                window: c_ulong,
                tag: c_uchar,
                atoms: Rc<Atoms>)
                -> ClientW {
-        ClientW(Rc::new(RefCell::new(Client::new(display, window, tag, atoms))))
+        ClientW(Rc::new(RefCell::new(Client::new(display, root, window, tag, atoms))))
     }
 
     pub fn borrow(&self) -> Ref<Client> {
@@ -137,7 +146,7 @@ impl ClientW {
                 .unwrap_or("Unknown".to_string());
     }
 
-    pub fn get_class(&self) -> String {
+    pub fn get_class<'a>(&self) -> String {
         // TODO: Revisit: unnecessary clone.
         self.borrow().class.clone()
     }
@@ -315,6 +324,40 @@ impl ClientW {
     pub fn raise_window(&self) {
         unsafe {
             xlib::XRaiseWindow(self.display(), self.window());
+        }
+    }
+
+    pub fn set_border_color(&mut self, normal: c_ulong, focused: c_ulong) {
+        self.borrow_mut().focused_border_color = focused;
+        self.borrow_mut().normal_border_color = normal;
+    }
+
+    pub fn focus(&self, focus: bool) {
+        if focus {
+            let window = self.window();
+            unsafe {
+                xlib::XSetWindowBorder(self.display(),
+                                       self.window(),
+                                       self.borrow().focused_border_color);
+                xlib::XChangeProperty(self.display(),
+                                      self.borrow().root,
+                                      self.atoms().net_active_window,
+                                      xlib::XA_WINDOW,
+                                      32,
+                                      xlib::PropModeReplace,
+                                      &self.window() as *const u64 as *const u8,
+                                      1);
+                xlib::XSetInputFocus(self.display(),
+                                     self.window(),
+                                     xlib::RevertToPointerRoot,
+                                     xlib::CurrentTime);
+            }
+        } else {
+            unsafe {
+                xlib::XSetWindowBorder(self.display(),
+                                       self.window(),
+                                       self.borrow().normal_border_color);
+            }
         }
     }
 }
