@@ -10,6 +10,7 @@ use std::slice;
 use x11::xlib;
 
 use atoms::Atoms;
+use config::Config;
 use util;
 
 #[derive(Clone)]
@@ -31,8 +32,20 @@ impl Default for Rect {
     }
 }
 
+impl Rect {
+    pub fn new(x: c_int, y: c_int, width: c_int, height: c_int) -> Rect {
+        Rect {
+            x: x,
+            y: y,
+            width: width,
+            height: height,
+        }
+    }
+}
+
 pub struct Client {
     pub atoms: Rc<Atoms>,
+    config: Rc<Config>,
     pub tag: c_uchar,
     pub title: String,
     root: xlib::Window,
@@ -50,31 +63,9 @@ pub struct Client {
     pub weight: i32,
 }
 
-impl Default for Client {
-    fn default() -> Client {
-        Client {
-            atoms: unsafe { Rc::new(zeroed()) },
-            tag: 0,
-            title: "broken".to_string(),
-            display: unsafe { zeroed() },
-            root: 0,
-            class: "broken".to_string(),
-            is_floating: false,
-            is_dialog: false,
-            focused_border_color: 0,
-            normal_border_color: 0,
-            window: 0,
-            old_rect: Rect::default(),
-            rect: Rect::default(),
-            border: 0,
-            old_border: 0,
-            weight: -1,
-        }
-    }
-}
-
 impl Client {
-    pub fn new(display: *mut xlib::Display,
+    pub fn new(config: Rc<Config>,
+               display: *mut xlib::Display,
                root: xlib::Window,
                window: c_ulong,
                tag: c_uchar,
@@ -82,12 +73,23 @@ impl Client {
                -> Client {
         let mut class_hint: xlib::XClassHint = unsafe { zeroed() };
         let mut client = Client {
+            config: config,
             display: display,
             root: root,
             window: window,
             tag: tag,
             atoms: atoms,
-            ..Default::default()
+            title: "broken".to_string(),
+            class: "broken".to_string(),
+            is_floating: false,
+            is_dialog: false,
+            focused_border_color: 0,
+            normal_border_color: 0,
+            old_rect: Rect::default(),
+            rect: Rect::default(),
+            border: 0,
+            old_border: 0,
+            weight: -1,
         };
         unsafe {
             xlib::XGetClassHint(display, window, &mut class_hint);
@@ -118,13 +120,14 @@ pub struct ClientW(Rc<RefCell<Client>>);
 pub type ClientL = Vec<ClientW>;
 
 impl ClientW {
-    pub fn new(display: *mut xlib::Display,
+    pub fn new(config: Rc<Config>,
+               display: *mut xlib::Display,
                root: xlib::Window,
                window: c_ulong,
                tag: c_uchar,
                atoms: Rc<Atoms>)
                -> ClientW {
-        ClientW(Rc::new(RefCell::new(Client::new(display, root, window, tag, atoms))))
+        ClientW(Rc::new(RefCell::new(Client::new(config, display, root, window, tag, atoms))))
     }
 
     pub fn borrow(&self) -> Ref<Client> {
@@ -404,7 +407,7 @@ impl ClientList for ClientL {
                       rank: bool,
                       yes_action: &Fn(&mut ClientW),
                       no_action: &Fn(&mut ClientW))
-                      -> Self {
+                      -> ClientL {
         let mut result = Self::new();
         for c in self {
             if predicate(c) {

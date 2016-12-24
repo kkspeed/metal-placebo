@@ -2,10 +2,9 @@ extern crate libc;
 extern crate x11;
 
 #[macro_use]
-mod util;
+pub mod util;
 mod atoms;
-mod client;
+pub mod client;
 mod xproto;
-
 pub mod core;
 pub mod config;

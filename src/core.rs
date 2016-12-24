@@ -16,15 +16,18 @@ use xproto;
 const TRACE: bool = true;
 
 
-pub fn tile(clients: &ClientL,
+pub fn tile(config: Rc<Config>,
+            clients: &ClientL,
             floating_len: usize,
             pane_x: c_int,
             pane_y: c_int,
             pane_width: c_int,
             pane_height: c_int)
             -> Vec<(c_int, c_int, c_int, c_int)> {
-    let mut result =
-        vec![(pane_x, pane_y, pane_width - 2 * BORDER_WIDTH, pane_height - 2 * BORDER_WIDTH)];
+    let mut result = vec![(pane_x,
+                           pane_y,
+                           pane_width - 2 * config.border_width,
+                           pane_height - 2 * config.border_width)];
     let mut count = clients.len() - floating_len;
     let mut direction = 1;
     log!("Tiling count: {}", count);
@@ -33,10 +36,10 @@ pub fn tile(clients: &ClientL,
         let r = (last_x, last_y, last_width, last_height);
         if direction == 1 {
             // Horizontal split
-            let p1 = (last_x, last_y, last_width / 2 - BORDER_WIDTH, last_height);
-            let p2 = (last_x + last_width / 2 + BORDER_WIDTH,
+            let p1 = (last_x, last_y, last_width / 2 - config.border_width, last_height);
+            let p2 = (last_x + last_width / 2 + config.border_width,
                       last_y,
-                      last_width / 2 - BORDER_WIDTH,
+                      last_width / 2 - config.border_width,
                       last_height);
             if p1.2 < 0 {
                 result.push(r.clone());
@@ -48,10 +51,10 @@ pub fn tile(clients: &ClientL,
         } else {
             // Vertical split
             let p2 = (last_x,
-                      last_y + last_height / 2 + BORDER_WIDTH,
+                      last_y + last_height / 2 + config.border_width,
                       last_width,
-                      last_height / 2 - BORDER_WIDTH);
-            let p1 = (last_x, last_y, last_width, last_height / 2 - BORDER_WIDTH);
+                      last_height / 2 - config.border_width);
+            let p1 = (last_x, last_y, last_width, last_height / 2 - config.border_width);
             if p2.3 < 0 {
                 result.push(r.clone());
                 result.push(r);
@@ -66,18 +69,20 @@ pub fn tile(clients: &ClientL,
     result
 }
 
-pub fn fullscreen(clients: &ClientL,
+pub fn fullscreen(config: Rc<Config>,
+                  clients: &ClientL,
                   floating_len: usize,
                   pane_x: c_int,
                   pane_y: c_int,
                   pane_width: c_int,
                   pane_height: c_int)
                   -> Vec<(c_int, c_int, c_int, c_int)> {
-    vec![(pane_x , pane_y , pane_width - BORDER_WIDTH, pane_height - BORDER_WIDTH); 
+    vec![(pane_x , pane_y , pane_width - config.border_width, pane_height - config.border_width); 
         clients.len() - floating_len]
 }
 
-pub fn overview(clients: &ClientL,
+pub fn overview(config: Rc<Config>,
+                clients: &ClientL,
                 floating_len: usize,
                 pane_x: c_int,
                 pane_y: c_int,
@@ -91,17 +96,17 @@ pub fn overview(clients: &ClientL,
         let mut tmp = Vec::new();
         for &(x, y, width, height) in &result {
             if direction == 0 {
-                tmp.push((x, y, width / 2 - OVERVIEW_INSET, height - OVERVIEW_INSET));
-                tmp.push((x + width / 2 + OVERVIEW_INSET,
+                tmp.push((x, y, width / 2 - config.overview_inset, height - config.overview_inset));
+                tmp.push((x + width / 2 + config.overview_inset,
                           y,
-                          width / 2 - OVERVIEW_INSET,
-                          height - OVERVIEW_INSET));
+                          width / 2 - config.overview_inset,
+                          height - config.overview_inset));
             } else {
-                tmp.push((x, y, width - OVERVIEW_INSET, height / 2 - OVERVIEW_INSET));
+                tmp.push((x, y, width - config.overview_inset, height / 2 - config.overview_inset));
                 tmp.push((x,
-                          y + height / 2 + OVERVIEW_INSET,
-                          width - OVERVIEW_INSET,
-                          height / 2 - OVERVIEW_INSET));
+                          y + height / 2 + config.overview_inset,
+                          width - config.overview_inset,
+                          height / 2 - config.overview_inset));
             }
         }
         tmp.sort_by_key(|c| (c.1, c.0));
@@ -112,8 +117,8 @@ pub fn overview(clients: &ClientL,
     result
 }
 
-fn lookup_layout(tag: c_uchar) -> Option<LayoutFn> {
-    for &(t, f) in TAG_LAYOUT {
+fn lookup_layout(config: Rc<Config>, tag: c_uchar) -> Option<LayoutFn> {
+    for &(t, f) in config.tag_layout {
         if t == tag {
             return Some(f);
         }
@@ -127,9 +132,9 @@ struct Colors {
 }
 
 impl Colors {
-    fn new(display: *mut xlib::Display, window: c_ulong) -> Colors {
-        let normal_color = Colors::create_color(display, window, NORMAL_BORDER_COLOR);
-        let focused_color = Colors::create_color(display, window, FOCUSED_BORDER_COLOR);
+    fn new(config: Rc<Config>, display: *mut xlib::Display, window: c_ulong) -> Colors {
+        let normal_color = Colors::create_color(display, window, config.normal_border_color);
+        let focused_color = Colors::create_color(display, window, config.focused_border_color);
         Colors {
             normal_border_color: normal_color.pixel,
             focused_border_color: focused_color.pixel,
@@ -153,6 +158,7 @@ impl Colors {
 }
 
 pub struct WindowManager {
+    config: Rc<Config>,
     display: *mut xlib::Display,
     screen: c_int,
     root: c_ulong,
@@ -168,7 +174,8 @@ pub struct WindowManager {
 }
 
 impl WindowManager {
-    pub fn new() -> WindowManager {
+    pub fn new(cfg: Config) -> WindowManager {
+        let config = Rc::new(cfg);
         let display = unsafe { xlib::XOpenDisplay(null()) };
         let screen = unsafe { xlib::XDefaultScreen(display) };
         let root = unsafe { xlib::XRootWindow(display, screen) };
@@ -176,6 +183,7 @@ impl WindowManager {
         let height = unsafe { xlib::XDisplayHeight(display, screen) };
         let atoms = Rc::new(Atoms::create_atom(display));
         let mut wm = WindowManager {
+            config: config.clone(),
             display: display,
             screen: screen,
             root: root,
@@ -186,7 +194,7 @@ impl WindowManager {
             current_stack: Vec::new(),
             current_focus: None,
             clients: Vec::new(),
-            colors: Colors::new(display, root),
+            colors: Colors::new(config.clone(), display, root),
             logger: MyLogger::new(&LOGGER_CONFIG),
         };
 
@@ -253,7 +261,7 @@ impl WindowManager {
         unsafe {
             let modifiers = vec![0, xlib::LockMask];
             xlib::XUngrabKey(self.display, xlib::AnyKey, xlib::AnyModifier, self.root);
-            for &key in KEYS {
+            for &key in self.config.keys {
                 let code = xlib::XKeysymToKeycode(self.display, key.1 as u64);
                 for modifier in modifiers.iter() {
                     xlib::XGrabKey(self.display,
@@ -265,7 +273,19 @@ impl WindowManager {
                                    xlib::GrabModeAsync);
                 }
             }
-            for &key in TAG_KEYS {
+            for &key in self.config.tag_keys {
+                let code = xlib::XKeysymToKeycode(self.display, key.1 as u64);
+                for modifier in modifiers.iter() {
+                    xlib::XGrabKey(self.display,
+                                   code as i32,
+                                   key.0 | modifier,
+                                   self.root,
+                                   1,
+                                   xlib::GrabModeAsync,
+                                   xlib::GrabModeAsync);
+                }
+            }
+            for &key in self.config.add_keys {
                 let code = xlib::XKeysymToKeycode(self.display, key.1 as u64);
                 for modifier in modifiers.iter() {
                     xlib::XGrabKey(self.display,
@@ -484,7 +504,8 @@ impl WindowManager {
         } else {
             self.current_tag
         };
-        let mut client = ClientW::new(self.display,
+        let mut client = ClientW::new(self.config.clone(),
+                                      self.display,
                                       self.root,
                                       window,
                                       self.current_tag,
@@ -505,7 +526,7 @@ impl WindowManager {
                                   &mut client.borrow_mut().window as *mut c_ulong as *mut u8,
                                   1);
             let mut wc: xlib::XWindowChanges = zeroed();
-            wc.border_width = BORDER_WIDTH;
+            wc.border_width = self.config.border_width;
             xlib::XConfigureWindow(self.display, window, xlib::CWBorderWidth as u32, &mut wc);
             xlib::XSetWindowBorder(self.display, window, self.colors.normal_border_color);
             xlib::XSelectInput(self.display,
@@ -517,7 +538,7 @@ impl WindowManager {
             xlib::XMapWindow(self.display, window);
         }
 
-        for r in RULES {
+        for r in self.config.rules {
             if r.0(&client) {
                 r.1(&mut client);
             }
@@ -568,13 +589,14 @@ impl WindowManager {
             })
             .collect();
         let t = &tile;
-        let layout_fn = lookup_layout(tag).unwrap_or(t);
-        let positions = layout_fn(&self.current_stack,
+        let layout_fn = lookup_layout(self.config.clone(), tag).unwrap_or(t);
+        let positions = layout_fn(self.config.clone(),
+                                  &self.current_stack,
                                   floating_windows.len(),
                                   0,
-                                  BAR_HEIGHT,
+                                  self.config.bar_height,
                                   self.screen_width,
-                                  self.screen_height - BAR_HEIGHT);
+                                  self.screen_height - self.config.bar_height);
 
         for i in 0..self.current_stack.len() {
             let mut client = self.current_stack[i].clone();
@@ -678,12 +700,17 @@ impl WindowManager {
         unsafe {
             let key_event = xlib::XKeyEvent::from(*event);
             let keysym = xlib::XKeycodeToKeysym(self.display, key_event.keycode as u8, 0);
-            for &key in KEYS {
+            for &key in self.config.keys {
                 if key.1 == keysym as c_uint && clean_mask(key_event.state) == key.0 {
                     key.2(self);
                 }
             }
-            for &key in TAG_KEYS {
+            for &key in self.config.tag_keys {
+                if key.1 == keysym as c_uint && clean_mask(key_event.state) == key.0 {
+                    key.2(self);
+                }
+            }
+            for &key in self.config.add_keys {
                 if key.1 == keysym as c_uint && clean_mask(key_event.state) == key.0 {
                     key.2(self);
                 }
@@ -751,13 +778,16 @@ impl WindowManager {
     }
 
     pub fn run(&mut self) {
-        for prog in START_PROGRAMS {
+        for prog in self.config.start_programs {
             prog();
         }
         unsafe {
             let mut event: xlib::XEvent = zeroed();
-            while xlib::XNextEvent(self.display, &mut event) == 0 {
-                self.handle_event(&event);
+            let display = self.display;
+            while xlib::XNextEvent(display, &mut event) == 0 {
+                {
+                    self.handle_event(&event);
+                }
             }
         }
     }
