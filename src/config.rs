@@ -7,7 +7,6 @@ use x11::{xlib, keysym};
 use core::{WindowManager, overview, fullscreen};
 use client::{ClientL, ClientW};
 use util;
-use util::spawn;
 
 const FOCUSED_BORDER_COLOR: &'static str = "RGBi:0.0/1.0/1.0";
 const NORMAL_BORDER_COLOR: &'static str = "RGBi:0.0/0.3/0.3";
@@ -59,20 +58,15 @@ const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))] =
         }
     })];
 
-const TAG_KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))] =
-    &define_tags!(xlib::Mod1Mask,
-                  xlib::ShiftMask,
-                  ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']);
+const TAG_KEYS: &'static (&'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))],
+          &'static [c_uchar]) = &define_tags!(xlib::Mod1Mask,
+                                              xlib::ShiftMask,
+                                              ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']);
 
 pub type LayoutFn = &'static Fn(Rc<Config>, &ClientL, usize, c_int, c_int, c_int, c_int)
                                 -> Vec<(c_int, c_int, c_int, c_int)>;
-const TAG_LAYOUT: &'static [(c_uchar, LayoutFn)] = &[('9' as c_uchar, &fullscreen),
-                                                     (TAG_OVERVIEW, &overview)];
 
-pub const TAG_DEFAULT: c_uchar = '1' as c_uchar;
 pub const TAG_OVERVIEW: c_uchar = 0 as c_uchar;
-
-
 
 pub struct Config {
     pub add_keys: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))],
@@ -84,6 +78,9 @@ pub struct Config {
     pub overview_inset: c_int,
     pub rules: &'static [(&'static Fn(&ClientW) -> bool, &'static Fn(&mut ClientW))],
     pub start_programs: &'static [&'static Fn()],
+    pub tags: &'static [c_uchar],
+    pub tag_default: c_uchar,
+    pub tag_description: &'static [(c_uchar, &'static str)],
     pub tag_keys: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))],
     pub tag_layout: &'static [(c_uchar, LayoutFn)],
     pub window_expand_delta: c_int,
@@ -147,10 +144,22 @@ impl Config {
         self
     }
 
+    pub fn tag_default(mut self, tag: c_uchar) -> Config {
+        self.tag_default = tag;
+        self
+    }
+
+    pub fn tag_description(mut self, description: &'static [(c_uchar, &'static str)]) -> Config {
+        self.tag_description = description;
+        self
+    }
+
     pub fn tag_keys(mut self,
-                    keys: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))])
+                    keys: &'static (&'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))],
+                                    &'static [c_uchar]))
                     -> Config {
-        self.tag_keys = keys;
+        self.tag_keys = keys.0;
+        self.tag_default = keys.1[0];
         self
     }
 
@@ -168,6 +177,15 @@ impl Config {
         self.window_move_delta = delta;
         self
     }
+
+    pub fn get_description(&self, tag: c_uchar) -> Option<&'static str> {
+        for c in self.tag_description {
+            if c.0 == tag {
+                return Some(c.1);
+            }
+        }
+        None
+    }
 }
 
 impl Default for Config {
@@ -182,8 +200,11 @@ impl Default for Config {
             overview_inset: OVERVIEW_INSET,
             rules: &[],
             start_programs: &[],
-            tag_keys: TAG_KEYS,
-            tag_layout: TAG_LAYOUT,
+            tags: TAG_KEYS.1,
+            tag_default: TAG_KEYS.1[0],
+            tag_description: &[],
+            tag_keys: TAG_KEYS.0,
+            tag_layout: &[],
             window_expand_delta: WINDOW_EXPAND_DELTA,
             window_move_delta: WINDOW_MOVE_DELTA,
         }

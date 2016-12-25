@@ -15,7 +15,6 @@ use xproto;
 
 const TRACE: bool = true;
 
-
 pub fn tile(config: Rc<Config>,
             clients: &ClientL,
             floating_len: usize,
@@ -190,7 +189,7 @@ impl WindowManager {
             screen_width: width,
             screen_height: height,
             atoms: atoms,
-            current_tag: TAG_DEFAULT,
+            current_tag: config.tag_default,
             current_stack: Vec::new(),
             current_focus: None,
             clients: Vec::new(),
@@ -230,7 +229,8 @@ impl WindowManager {
                                           &mut xattr);
             xlib::XSelectInput(display, root, xattr.event_mask);
         }
-        wm.logger.dump(&wm.clients,
+        wm.logger.dump(&config,
+                       &wm.clients,
                        wm.current_tag,
                        &wm.current_stack,
                        &wm.current_focus);
@@ -358,7 +358,8 @@ impl WindowManager {
         self.current_tag = tag;
         self.set_focus(None);
         self.arrange_windows();
-        self.logger.dump(&self.clients,
+        self.logger.dump(&self.config,
+                         &self.clients,
                          self.current_tag,
                          &self.current_stack,
                          &self.current_focus);
@@ -381,7 +382,8 @@ impl WindowManager {
             client.send_event(atom);
         }
         self.current_focus = i;
-        self.logger.dump(&self.clients,
+        self.logger.dump(&self.config,
+                         &self.clients,
                          self.current_tag,
                          &self.current_stack,
                          &self.current_focus);
@@ -500,7 +502,7 @@ impl WindowManager {
 
     fn manage_window(&mut self, window: c_ulong, xa: &xlib::XWindowAttributes) {
         let tag = if self.current_tag == TAG_OVERVIEW {
-            TAG_DEFAULT
+            self.config.tag_default
         } else {
             self.current_tag
         };
@@ -755,7 +757,8 @@ impl WindowManager {
             if property_event.atom == xlib::XA_WM_NAME ||
                property_event.atom == self.atoms.net_wm_name {
                 c.clone().update_title();
-                self.logger.dump(&self.clients,
+                self.logger.dump(&self.config,
+                                 &self.clients,
                                  self.current_tag,
                                  &self.current_stack,
                                  &self.current_focus);

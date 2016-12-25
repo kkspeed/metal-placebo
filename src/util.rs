@@ -5,6 +5,8 @@ use std::mem::zeroed;
 use std::process;
 
 use x11::xlib;
+
+use config::Config;
 use xproto;
 
 use client::{ClientL, ClientW};
@@ -20,6 +22,7 @@ pub struct LoggerConfig {
 pub trait Logger {
     fn new(config: &'static LoggerConfig) -> Self;
     fn dump(&mut self,
+            global_config: &Config,
             all_clients: &ClientL,
             current_tag: c_uchar,
             current_stack: &ClientL,
@@ -44,6 +47,7 @@ impl Logger for XMobarLogger {
     }
 
     fn dump(&mut self,
+            global_config: &Config,
             all_clients: &ClientL,
             current_tag: c_uchar,
             current_stack: &ClientL,
@@ -58,10 +62,26 @@ impl Logger for XMobarLogger {
                 if current_tag == 0 {
                     result += &format!("<fc={}> Overview </fc> |", self.config.selected_tag_color);
                 } else {
-                    result += &format!("<fc={}> {} </fc> |", self.config.selected_tag_color, t);
+                    result += &if let Some(description) =
+                        global_config.get_description(*t as c_uchar) {
+                        format!("<fc={}> {} - {} </fc> |",
+                                self.config.selected_tag_color,
+                                t,
+                                description)
+                    } else {
+                        format!("<fc={}> {} </fc> |", self.config.selected_tag_color, t)
+                    };
                 }
             } else {
-                result += &format!("<fc={}> {} </fc> |", self.config.tag_color, t);
+                result += &if let Some(description) =
+                    global_config.get_description(*t as c_uchar) {
+                    format!("<fc={}> {} - {} </fc> |",
+                            self.config.tag_color,
+                            t,
+                            description)
+                } else {
+                    format!("<fc={}> {} </fc> |", self.config.tag_color, t)
+                };
             }
         }
 
@@ -119,10 +139,10 @@ macro_rules! x_disable_error_unsafe {
 #[macro_export]
 macro_rules! define_tags (
     ( $modkey: expr, $mod_mask: expr, [$($x: expr), *]) => {
-        [
+        (&[
             $(($modkey, $x as c_uint, &|w| w.select_tag($x as c_uchar)), )*
             $(($modkey | $mod_mask, $x as c_uint, &|w| w.add_tag($x as c_uchar)),)*
-        ]
+        ], &[$($x as c_uchar, )*]) 
     };
 );
 
