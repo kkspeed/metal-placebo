@@ -366,6 +366,15 @@ impl WindowManager {
                          &self.current_focus);
     }
 
+    pub fn toggle_maximize(&mut self) {
+        if let Some(index) = self.current_focus {
+            let maximized = self.current_stack[index].is_maximized();
+            self.current_stack[index].set_maximized(!maximized);
+            self.arrange_windows();
+            self.set_focus(Some(index));
+        }
+    }
+
     fn set_focus(&mut self, i: Option<usize>) {
         if let Some(prev_focused) = self.current_focus {
             if prev_focused < self.current_stack.len() {
@@ -612,7 +621,13 @@ impl WindowManager {
                               },
                               true);
             } else {
-                if !client.is_floating() {
+                if client.is_maximized() {
+                    let rect = Rect::new(0,
+                                         self.config.bar_height,
+                                         self.screen_width - 2 * self.config.border_width,
+                                         self.screen_height - self.config.bar_height);
+                    client.resize(rect, true);
+                } else if !client.is_floating() {
                     client.resize(Rect {
                                       x: positions[i].0,
                                       y: positions[i].1,

@@ -52,6 +52,7 @@ pub struct Client {
     class: String,
     is_floating: bool,
     is_dialog: bool,
+    is_maximized: bool,
     normal_border_color: c_ulong,
     focused_border_color: c_ulong,
     pub display: *mut xlib::Display,
@@ -83,6 +84,7 @@ impl Client {
             class: "broken".to_string(),
             is_floating: false,
             is_dialog: false,
+            is_maximized: false,
             focused_border_color: 0,
             normal_border_color: 0,
             old_rect: Rect::default(),
@@ -170,6 +172,10 @@ impl ClientW {
         }
     }
 
+    pub fn is_maximized(&self) -> bool {
+        self.borrow().is_maximized
+    }
+
     pub fn get_atom(&self, atom: xlib::Atom) -> Option<xlib::Atom> {
         let mut da: xlib::Atom = 0;
         let mut di: c_int = 0;
@@ -204,6 +210,10 @@ impl ClientW {
         self.borrow_mut().is_floating = floating;
     }
 
+    pub fn set_maximized(&mut self, maximized: bool) {
+        self.borrow_mut().is_maximized = maximized;
+    }
+
     pub fn display(&self) -> *mut xlib::Display {
         self.borrow().display
     }
@@ -220,7 +230,7 @@ impl ClientW {
         if visible {
             self.move_window(rect.x, rect.y, false);
         } else {
-            self.move_window(-2 * rect.width, rect.y, false);
+            self.move_window(-3 * rect.width, rect.y, false);
         }
     }
 
