@@ -10,7 +10,9 @@ use atoms::Atoms;
 use client::{ClientL, ClientList, ClientW, Rect};
 use config::*;
 use util;
-use util::{clean_mask, Logger};
+use util::clean_mask;
+use loggers;
+use loggers::Logger;
 use xproto;
 
 const TRACE: bool = true;
@@ -169,7 +171,7 @@ pub struct WindowManager {
     clients: ClientL,
     pub current_focus: Option<usize>,
     colors: Colors,
-    logger: MyLogger,
+    logger: Box<Logger + 'static>,
 }
 
 impl WindowManager {
@@ -194,7 +196,7 @@ impl WindowManager {
             current_focus: None,
             clients: Vec::new(),
             colors: Colors::new(config.clone(), display, root),
-            logger: MyLogger::new(&LOGGER_CONFIG),
+            logger: Box::new(loggers::DummyLogger::new(loggers::LoggerConfig::default())),
         };
 
         let net_atom_list = vec![wm.atoms.net_active_window,
@@ -229,11 +231,6 @@ impl WindowManager {
                                           &mut xattr);
             xlib::XSelectInput(display, root, xattr.event_mask);
         }
-        wm.logger.dump(&config,
-                       &wm.clients,
-                       wm.current_tag,
-                       &wm.current_stack,
-                       &wm.current_focus);
         wm.grab_keys();
         wm
     }
@@ -344,6 +341,10 @@ impl WindowManager {
                                       1);
             }
         }
+    }
+
+    pub fn set_logger(&mut self, logger: Box<Logger + 'static>) {
+        self.logger = logger;
     }
 
     pub fn add_tag(&mut self, tag: c_uchar) {
@@ -781,6 +782,11 @@ impl WindowManager {
     }
 
     pub fn run(&mut self) {
+        self.logger.dump(&self.config,
+                         &self.clients,
+                         self.current_tag,
+                         &self.current_stack,
+                         &self.current_focus);
         for prog in self.config.start_programs {
             prog();
         }

@@ -3,8 +3,10 @@ extern crate x11;
 
 #[macro_use]
 pub mod util;
-mod atoms;
 pub mod client;
-mod xproto;
 pub mod core;
 pub mod config;
+pub mod loggers;
+mod atoms;
+#[allow(dead_code, non_upper_case_globals)]
+mod xproto;

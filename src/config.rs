@@ -4,9 +4,8 @@ use std::rc::Rc;
 
 use x11::{xlib, keysym};
 
-use core::{WindowManager, overview, fullscreen};
+use core::WindowManager;
 use client::{ClientL, ClientW};
-use util;
 
 const FOCUSED_BORDER_COLOR: &'static str = "RGBi:0.0/1.0/1.0";
 const NORMAL_BORDER_COLOR: &'static str = "RGBi:0.0/0.3/0.3";
@@ -17,16 +16,6 @@ const BAR_HEIGHT: c_int = 15;
 
 const WINDOW_MOVE_DELTA: c_int = 15;
 const WINDOW_EXPAND_DELTA: c_int = 10;
-
-pub type MyLogger = util::XMobarLogger;
-
-pub const LOGGER_CONFIG: &'static util::LoggerConfig = &util::LoggerConfig {
-    selected_tag_color: "#00FF00",
-    tag_color: "#FFFFFF",
-    separator_color: "#000000",
-    selected_client_color: "#FFFF00",
-    client_color: "#FFFFFF",
-};
 
 pub const MOD_MASK: c_uint = xlib::Mod1Mask;
 

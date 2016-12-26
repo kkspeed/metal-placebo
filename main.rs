@@ -4,10 +4,11 @@ extern crate x11;
 
 use std::os::raw::{c_uchar, c_uint};
 use x11::{keysym, xlib};
+
 use rswm::client::ClientW;
 use rswm::config::*;
 use rswm::core;
-use rswm::util;
+use rswm::loggers;
 use rswm::util::spawn;
 
 const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut core::WindowManager))] =
@@ -30,8 +31,8 @@ const TAG_KEYS: &'static (&'static [(c_uint, c_uint, &'static Fn(&mut core::Wind
                                               xlib::ShiftMask,
                                               ['1', '2', '3', '4', '5', '6', '7', '8', '9']);
 
-const TAG_DESCRIPTION: &'static [(c_uchar, &'static str)] = &[('1' as c_uchar, "web"),
-                                                              ('2' as c_uchar, "code")];
+const TAG_DESCRIPTION: &'static [(c_uchar, &'static str)] = &[('1' as c_uchar, "网页"),
+                                                              ('2' as c_uchar, "代码")];
 
 fn main() {
     let config = Config::default()
@@ -43,6 +44,8 @@ fn main() {
         .rules(RULES)
         .tag_description(TAG_DESCRIPTION)
         .tag_layout(TAG_LAYOUT);
+    let xmobar_logger = loggers::XMobarLogger::new(loggers::LoggerConfig::default());
     let mut window_manager = core::WindowManager::new(config);
+    window_manager.set_logger(Box::new(xmobar_logger));
     window_manager.run();
 }

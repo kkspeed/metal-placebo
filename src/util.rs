@@ -1,108 +1,12 @@
 use std::ffi::CString;
 use std::io::Write;
-use std::os::raw::{c_char, c_int, c_uchar, c_void};
+use std::os::raw::{c_char, c_int};
 use std::mem::zeroed;
 use std::process;
 
 use x11::xlib;
 
-use config::Config;
 use xproto;
-
-use client::{ClientL, ClientW};
-
-pub struct LoggerConfig {
-    pub selected_tag_color: &'static str,
-    pub tag_color: &'static str,
-    pub separator_color: &'static str,
-    pub selected_client_color: &'static str,
-    pub client_color: &'static str,
-}
-
-pub trait Logger {
-    fn new(config: &'static LoggerConfig) -> Self;
-    fn dump(&mut self,
-            global_config: &Config,
-            all_clients: &ClientL,
-            current_tag: c_uchar,
-            current_stack: &ClientL,
-            focus: &Option<usize>);
-}
-
-pub struct XMobarLogger {
-    config: &'static LoggerConfig,
-    child_stdin: process::ChildStdin,
-}
-
-impl Logger for XMobarLogger {
-    fn new(config: &'static LoggerConfig) -> XMobarLogger {
-        let process::Child { stdin: child_stdin, .. } = process::Command::new("xmobar")
-            .stdin(process::Stdio::piped())
-            .spawn()
-            .expect("cannot spawn xmobar");
-        XMobarLogger {
-            config: config,
-            child_stdin: child_stdin.unwrap(),
-        }
-    }
-
-    fn dump(&mut self,
-            global_config: &Config,
-            all_clients: &ClientL,
-            current_tag: c_uchar,
-            current_stack: &ClientL,
-            focus: &Option<usize>) {
-        let mut tags: Vec<char> = all_clients.iter().map(|c| c.tag() as char).collect();
-        tags.push(current_tag as char);
-        tags.sort();
-        tags.dedup();
-        let mut result = String::new();
-        for t in &tags {
-            if *t == current_tag as char {
-                if current_tag == 0 {
-                    result += &format!("<fc={}> Overview </fc> |", self.config.selected_tag_color);
-                } else {
-                    result += &if let Some(description) =
-                        global_config.get_description(*t as c_uchar) {
-                        format!("<fc={}> {} - {} </fc> |",
-                                self.config.selected_tag_color,
-                                t,
-                                description)
-                    } else {
-                        format!("<fc={}> {} </fc> |", self.config.selected_tag_color, t)
-                    };
-                }
-            } else {
-                result += &if let Some(description) =
-                    global_config.get_description(*t as c_uchar) {
-                    format!("<fc={}> {} - {} </fc> |",
-                            self.config.tag_color,
-                            t,
-                            description)
-                } else {
-                    format!("<fc={}> {} </fc> |", self.config.tag_color, t)
-                };
-            }
-        }
-
-        result += " :: ";
-        let mut index = 99999;
-        if let &Some(ref i) = focus {
-            index = *i;
-        }
-
-        let mut color;
-        for i in 0..current_stack.len() {
-            if i == index {
-                color = self.config.selected_client_color;
-            } else {
-                color = self.config.client_color;
-            }
-            result += &format!("[<fc={}>{1:.5}</fc>] ", color, current_stack[i].get_title());
-        }
-        writeln!(self.child_stdin, "{}", result).unwrap();
-    }
-}
 
 #[macro_export]
 macro_rules! log(
