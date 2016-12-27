@@ -44,7 +44,7 @@ fn main() {
         .rules(RULES)
         .tag_description(TAG_DESCRIPTION)
         .tag_layout(TAG_LAYOUT);
-    let xmobar_logger = loggers::XMobarLogger::new(loggers::LoggerConfig::default());
+    let xmobar_logger = loggers::XMobarLogger::new(loggers::LoggerConfig::default(), &[]);
     let mut window_manager = core::WindowManager::new(config);
     window_manager.set_logger(Box::new(xmobar_logger));
     window_manager.run();

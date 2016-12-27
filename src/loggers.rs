@@ -88,9 +88,10 @@ pub struct XMobarLogger {
 }
 
 impl XMobarLogger {
-    pub fn new(config: LoggerConfig) -> XMobarLogger {
+    pub fn new(config: LoggerConfig, xmobar_args: &[&str]) -> XMobarLogger {
         let process::Child { stdin: child_stdin, .. } = process::Command::new("xmobar")
             .stdin(process::Stdio::piped())
+            .args(xmobar_args)
             .spawn()
             .expect("cannot spawn xmobar");
         XMobarLogger {
