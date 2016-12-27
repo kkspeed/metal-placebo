@@ -24,7 +24,11 @@ const TAG_LAYOUT: &'static [(c_uchar, LayoutFn)] = &[('9' as c_uchar, &core::ful
 const RULES: &'static [(&'static Fn(&ClientW) -> bool, &'static Fn(&mut ClientW))] =
     &[(&|c| c.get_class() == "Gimp", &|c| c.set_floating(true)),
       (&|c| c.is_dialog(), &|c| c.set_floating(true)),
-      (&|c| c.get_class() == "Tilda", &|c| c.set_floating(true))];
+      (&|c| c.get_class() == "Tilda",
+       &|c| {
+           c.set_floating(true);
+           c.set_sticky(true);
+       })];
 
 const TAG_KEYS: &'static (&'static [(c_uint, c_uint, &'static Fn(&mut core::WindowManager))],
           &'static [c_uchar]) = &define_tags!(xlib::Mod1Mask,
@@ -37,6 +41,7 @@ const TAG_DESCRIPTION: &'static [(c_uchar, &'static str)] = &[('1' as c_uchar, "
 fn main() {
     let config = Config::default()
         .border_width(3)
+        .bar_height(18)
         .addtional_keys(KEYS)
         .start_programs(START_PROGRAMS)
         .tag_keys(TAG_KEYS)

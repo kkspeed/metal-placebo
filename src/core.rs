@@ -579,13 +579,22 @@ impl WindowManager {
     fn arrange_windows(&mut self) {
         let tag = self.current_tag;
         self.current_stack = self.clients
-            .select_clients(&|c| c.tag() == tag || tag == TAG_OVERVIEW,
+            .select_clients(&|c| c.tag() == tag || tag == TAG_OVERVIEW || c.is_sticky(),
                             true,
                             &|c| c.show(true),
                             &|c| c.show(false));
-        let focus = if self.current_stack.len() > 0 {
-            log!("Set focus to: 0, stack_len: {}", self.current_stack.len());
-            Some(0)
+        let len = self.current_stack.len();
+        let focus = if len > 0 {
+            let f = if self.current_stack[len - 1].is_floating() &&
+                       self.current_tag != TAG_OVERVIEW {
+                len - 1
+            } else {
+                0
+            };
+            log!("Set focus to: {}, stack_len: {}",
+                 f,
+                 self.current_stack.len());
+            Some(f)
         } else {
             log!("Set focus to: None, stack_len: {}",
                  self.current_stack.len());
@@ -628,6 +637,7 @@ impl WindowManager {
                                          self.screen_height - self.config.bar_height);
                     client.resize(rect, true);
                 } else if !client.is_floating() {
+                    log!("Client title {}", client.get_title());
                     client.resize(Rect {
                                       x: positions[i].0,
                                       y: positions[i].1,
@@ -666,7 +676,7 @@ impl WindowManager {
         let mut xa: xlib::XWindowChanges = unsafe { zeroed() };
         let configure_request_event = xlib::XConfigureRequestEvent::from(*event);
         if let Some(mut c) = self.clients.get_client_by_window(configure_request_event.window) {
-            if c.tag() == self.current_tag && c.is_floating() {
+            if (c.is_sticky() || c.tag() == self.current_tag) && c.is_floating() {
                 c.show(true);
             } else {
                 c.configure();
@@ -767,8 +777,10 @@ impl WindowManager {
     }
 
     fn on_property_notify(&mut self, event: &xlib::XEvent) {
-        trace!("[on_property_notify]");
         let property_event = xlib::XPropertyEvent::from(*event);
+        trace!("[on_property_notify] atom: {}\n atoms: {:?}",
+               property_event.atom,
+               self.atoms);
         if let Some(c) = self.clients.get_client_by_window(property_event.window) {
             if property_event.atom == xlib::XA_WM_NAME ||
                property_event.atom == self.atoms.net_wm_name {

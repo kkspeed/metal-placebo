@@ -51,6 +51,7 @@ pub struct Client {
     root: xlib::Window,
     class: String,
     is_floating: bool,
+    is_sticky: bool,
     is_dialog: bool,
     is_maximized: bool,
     normal_border_color: c_ulong,
@@ -84,6 +85,7 @@ impl Client {
             class: "broken".to_string(),
             is_floating: false,
             is_dialog: false,
+            is_sticky: false,
             is_maximized: false,
             focused_border_color: 0,
             normal_border_color: 0,
@@ -160,6 +162,10 @@ impl ClientW {
         self.borrow().is_floating
     }
 
+    pub fn is_sticky(&self) -> bool {
+        self.borrow().is_sticky
+    }
+
     pub fn atoms(&self) -> Rc<Atoms> {
         self.borrow().atoms.clone()
     }
@@ -208,6 +214,10 @@ impl ClientW {
 
     pub fn set_floating(&mut self, floating: bool) {
         self.borrow_mut().is_floating = floating;
+    }
+
+    pub fn set_sticky(&mut self, sticky: bool) {
+        self.borrow_mut().is_sticky = sticky;
     }
 
     pub fn set_maximized(&mut self, maximized: bool) {
@@ -403,7 +413,7 @@ impl ClientList for ClientL {
     }
 
     fn rank(&mut self) {
-        self.sort_by_key(|c| (c.tag(), c.is_floating(), -c.borrow().weight));
+        self.sort_by_key(|c| (c.is_sticky(), c.tag(), c.is_floating(), -c.borrow().weight));
     }
 
     fn show(&mut self) {
