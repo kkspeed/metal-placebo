@@ -240,7 +240,7 @@ impl ClientW {
         if visible {
             self.move_window(rect.x, rect.y, false);
         } else {
-            self.move_window(-3 * rect.width, rect.y, false);
+            self.move_window(-10 * rect.width, rect.y, false);
         }
     }
 

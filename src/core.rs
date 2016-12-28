@@ -790,6 +790,14 @@ impl WindowManager {
                                  self.current_tag,
                                  &self.current_stack,
                                  &self.current_focus);
+            } else if property_event.atom == xlib::XA_WM_NORMAL_HINTS {
+                // TODO: This is a very ugly solution to invalidate the window that requires
+                // resize to repaint, especially gtk 2 windows: emacs, lxterminal etc.
+                let mut rect = c.get_rect();
+                rect.width = rect.width + 1;
+                c.clone().resize(rect.clone(), false);
+                rect.width = rect.width - 1;
+                c.clone().resize(rect, false);
             }
         }
     }
