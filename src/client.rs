@@ -3,7 +3,7 @@ use std::ffi::CString;
 use std::io::Write;
 use std::os::raw::{c_long, c_int, c_uchar, c_uint, c_ulong, c_void, c_char};
 use std::mem::{size_of, zeroed};
-use std::ptr::null_mut;
+use std::ptr::{null, null_mut};
 use std::rc::Rc;
 use std::slice;
 
@@ -13,7 +13,7 @@ use atoms::Atoms;
 use config::Config;
 use util;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Rect {
     pub x: c_int,
     pub y: c_int,
@@ -50,10 +50,12 @@ pub struct Client {
     pub title: String,
     root: xlib::Window,
     class: String,
+    was_floating: bool,
     is_floating: bool,
     is_sticky: bool,
     is_dialog: bool,
     is_maximized: bool,
+    is_fullscreen: bool,
     normal_border_color: c_ulong,
     focused_border_color: c_ulong,
     pub display: *mut xlib::Display,
@@ -83,10 +85,12 @@ impl Client {
             atoms: atoms,
             title: "broken".to_string(),
             class: "broken".to_string(),
+            was_floating: false,
             is_floating: false,
             is_dialog: false,
             is_sticky: false,
             is_maximized: false,
+            is_fullscreen: false,
             focused_border_color: 0,
             normal_border_color: 0,
             old_rect: Rect::default(),
@@ -107,6 +111,7 @@ impl Client {
 
     pub fn save_window_size(&mut self) {
         self.old_rect = self.rect.clone();
+        log!("Save window size: old rect: {:?}", self.old_rect);
     }
 
     pub fn set_size(&mut self, x: c_int, y: c_int, width: c_int, height: c_int) {
@@ -156,6 +161,10 @@ impl ClientW {
     pub fn get_class<'a>(&self) -> String {
         // TODO: Revisit: unnecessary clone.
         self.borrow().class.clone()
+    }
+
+    pub fn is_fullscreen(&self) -> bool {
+        self.borrow().is_fullscreen
     }
 
     pub fn is_floating(&self) -> bool {
@@ -213,6 +222,8 @@ impl ClientW {
     }
 
     pub fn set_floating(&mut self, floating: bool) {
+        let was_floating = self.borrow().is_floating;
+        self.borrow_mut().was_floating = was_floating;
         self.borrow_mut().is_floating = floating;
     }
 
@@ -222,6 +233,41 @@ impl ClientW {
 
     pub fn set_maximized(&mut self, maximized: bool) {
         self.borrow_mut().is_maximized = maximized;
+    }
+
+    pub fn set_fullscreen(&mut self, rect: Rect, fullscreen: bool) {
+        if fullscreen {
+            unsafe {
+                xlib::XChangeProperty(self.display(),
+                                      self.window(),
+                                      self.atoms().net_wm_state,
+                                      xlib::XA_ATOM,
+                                      32,
+                                      xlib::PropModeReplace,
+                                      (&self.atoms().net_wm_fullscreen as *const u64) as *const u8,
+                                      1);
+            }
+            self.borrow_mut().is_fullscreen = true;
+            self.set_floating(true);
+            self.resize(rect, false);
+            self.raise_window();
+        } else {
+            unsafe {
+                xlib::XChangeProperty(self.display(),
+                                      self.window(),
+                                      self.atoms().net_wm_state,
+                                      xlib::XA_ATOM,
+                                      32,
+                                      xlib::PropModeReplace,
+                                      null(),
+                                      0);
+            }
+            let was_floating = self.borrow().was_floating;
+            self.set_floating(was_floating);
+            self.borrow_mut().is_fullscreen = false;
+            let old_rect = self.borrow().old_rect.clone();
+            self.resize(old_rect, false);
+        }
     }
 
     pub fn display(&self) -> *mut xlib::Display {

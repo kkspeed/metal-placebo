@@ -1,6 +1,6 @@
 use std::io::Write;
 use std::mem::zeroed;
-use std::os::raw::{c_int, c_uchar, c_uint, c_ulong};
+use std::os::raw::{c_int, c_long, c_uchar, c_uint, c_ulong};
 use std::ptr::null;
 use std::rc::Rc;
 
@@ -378,6 +378,14 @@ impl WindowManager {
         }
     }
 
+    fn set_fullscreen(&mut self, client: ClientW, fullscreen: bool) {
+        client.clone().set_fullscreen(Rect::new(0, 0, self.screen_width, self.screen_height),
+                                      fullscreen);
+        if !fullscreen {
+            self.arrange_windows();
+        }
+    }
+
     fn set_focus(&mut self, i: Option<usize>) {
         if let Some(prev_focused) = self.current_focus {
             if prev_focused < self.current_stack.len() {
@@ -544,6 +552,7 @@ impl WindowManager {
             wc.border_width = self.config.border_width;
             xlib::XConfigureWindow(self.display, window, xlib::CWBorderWidth as u32, &mut wc);
             xlib::XSetWindowBorder(self.display, window, self.colors.normal_border_color);
+            self.update_window_type(client.clone());
             xlib::XSelectInput(self.display,
                                window,
                                xlib::EnterWindowMask | xlib::FocusChangeMask |
@@ -660,6 +669,16 @@ impl WindowManager {
         }
     }
 
+    fn update_window_type(&mut self, client: ClientW) {
+        log!("updating window type");
+        if let Some(state) = client.get_atom(self.atoms.net_wm_state) {
+            if state == self.atoms.net_wm_fullscreen {
+                log!("update window type to full screen");
+                self.set_fullscreen(client, true);
+            }
+        }
+    }
+
     fn on_button_press(&mut self, event: &xlib::XEvent) {
         trace!("[on_button_press]");
         let button_event = xlib::XButtonPressedEvent::from(*event);
@@ -671,7 +690,19 @@ impl WindowManager {
     }
 
     fn on_client_message(&mut self, event: &xlib::XEvent) {
-        trace!("[on_client_message]: not implemented!");
+        trace!("[on_client_message]");
+        let client_message: xlib::XClientMessageEvent = xlib::XClientMessageEvent::from(*event);
+        if let Some(c) = self.clients.get_client_by_window(client_message.window) {
+            if client_message.message_type == self.atoms.net_wm_state {
+                if client_message.data.get_long(1) == self.atoms.net_wm_fullscreen as c_long ||
+                   client_message.data.get_long(2) == self.atoms.net_wm_fullscreen as c_long {
+                    let fullscreen = client_message.data.get_long(0) == 1 ||
+                                     (client_message.data.get_long(0) == 2 && !c.is_fullscreen());
+                    log!("Client message: set_fullscreen: {}", fullscreen);
+                    self.set_fullscreen(c.clone(), fullscreen);
+                }
+            }
+        }
     }
 
     fn on_configure_request(&mut self, event: &xlib::XEvent) {
@@ -801,6 +832,8 @@ impl WindowManager {
                 c.clone().resize(rect.clone(), false);
                 rect.width = rect.width - 1;
                 c.clone().resize(rect, false);
+            } else if property_event.atom == self.atoms.net_wm_window_type {
+                self.update_window_type(c);
             }
         }
     }
