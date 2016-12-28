@@ -17,7 +17,7 @@ const BAR_HEIGHT: c_int = 15;
 const WINDOW_MOVE_DELTA: c_int = 15;
 const WINDOW_EXPAND_DELTA: c_int = 10;
 
-pub const MOD_MASK: c_uint = xlib::Mod1Mask;
+pub const MOD_MASK: c_uint = xlib::Mod4Mask;
 
 #[allow(unused_variables)]
 const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))] =
@@ -49,7 +49,7 @@ const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))] =
     })];
 
 const TAG_KEYS: &'static (&'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))],
-          &'static [c_uchar]) = &define_tags!(xlib::Mod1Mask,
+          &'static [c_uchar]) = &define_tags!(MOD_MASK,
                                               xlib::ShiftMask,
                                               ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']);
 
