@@ -78,7 +78,10 @@ pub fn fullscreen(config: Rc<Config>,
                   pane_width: c_int,
                   pane_height: c_int)
                   -> Vec<(c_int, c_int, c_int, c_int)> {
-    vec![(pane_x , pane_y , pane_width - config.border_width, pane_height - config.border_width); 
+    vec![(pane_x,
+          pane_y,
+          pane_width - 2 * config.border_width, 
+          pane_height - 2 * config.border_width); 
         clients.len() - floating_len]
 }
 
