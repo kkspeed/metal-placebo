@@ -18,7 +18,13 @@ const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut core::WindowManager))] =
       (MOD_MASK | xlib::Mod1Mask,
        keysym::XK_Print,
        &|_| spawn("scrot", &["-s", "-e", "mv $f ~/"])),
-      (MOD_MASK, keysym::XK_f, &|_| spawn("pcmanfm", &[]))];
+      (MOD_MASK, keysym::XK_f, &|_| spawn("pcmanfm", &[])),
+      (0, keysym::XF86XK_MonBrightnessUp, &|_| spawn("xbrightness", &["+10000"])),
+      (0, keysym::XF86XK_MonBrightnessDown, &|_| spawn("xbrightness", &["-10000"])),
+      (0, keysym::XF86XK_AudioRaiseVolume, &|_| spawn("amixer", &["set", "Master", "5000+"])),
+      (0, keysym::XF86XK_AudioLowerVolume, &|_| spawn("amixer", &["set", "Master", "5000-"])),
+      (0, keysym::XF86XK_AudioMute, &|_| spawn("amixer", &["set", "Master", "toggle"])),
+      (0, keysym::XF86XK_AudioMicMute, &|_| spawn("amixer", &["set", "Capture", "toggle"]))];
 
 const START_PROGRAMS: &'static [&'static Fn()] =
     &[&|| spawn("xcompmgr", &[]),
