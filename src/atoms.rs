@@ -12,9 +12,11 @@ pub struct Atoms {
     pub net_supported: c_ulong,
     pub net_wm_name: c_ulong,
     pub net_wm_state: c_ulong,
-    pub net_wm_fullscreen: c_ulong,
+    pub net_wm_state_above: c_ulong,
+    pub net_wm_state_fullscreen: c_ulong,
     pub net_wm_window_type: c_ulong,
     pub net_wm_window_type_dialog: c_ulong,
+    pub net_wm_window_type_dock: c_ulong,
     pub net_client_list: c_ulong,
 }
 
@@ -29,9 +31,11 @@ impl Atoms {
             net_supported: Atoms::intern_atom(display, "_NET_SUPPORTED"),
             net_wm_name: Atoms::intern_atom(display, "_NET_SUPPORTED"),
             net_wm_state: Atoms::intern_atom(display, "_NET_WM_STATE"),
-            net_wm_fullscreen: Atoms::intern_atom(display, "_NET_WM_STATE_FULLSCREEN"),
+            net_wm_state_fullscreen: Atoms::intern_atom(display, "_NET_WM_STATE_FULLSCREEN"),
+            net_wm_state_above: Atoms::intern_atom(display, "_NET_WM_STATE_ABOVE"),
             net_wm_window_type: Atoms::intern_atom(display, "_NET_WM_WINDOW_TYPE"),
             net_wm_window_type_dialog: Atoms::intern_atom(display, "_NET_WM_WINDOW_TYPE_DIALOG"),
+            net_wm_window_type_dock: Atoms::intern_atom(display, "_NET_WM_WINDOW_TYPE_DOCK"),
             net_client_list: Atoms::intern_atom(display, "_NET_CLIENT_LIST"),
         }
     }

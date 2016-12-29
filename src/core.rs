@@ -171,8 +171,9 @@ pub struct WindowManager {
     atoms: Rc<Atoms>,
     pub current_tag: c_uchar,
     pub current_stack: ClientL,
-    clients: ClientL,
+    pub clients: ClientL,
     pub current_focus: Option<usize>,
+    pub special_windows: ClientL,
     colors: Colors,
     logger: Box<Logger + 'static>,
 }
@@ -198,6 +199,7 @@ impl WindowManager {
             current_stack: Vec::new(),
             current_focus: None,
             clients: Vec::new(),
+            special_windows: Vec::new(),
             colors: Colors::new(config.clone(), display, root),
             logger: Box::new(loggers::DummyLogger::new(loggers::LoggerConfig::default())),
         };
@@ -205,12 +207,14 @@ impl WindowManager {
         let net_atom_list = vec![wm.atoms.net_active_window,
                                  wm.atoms.net_client_list,
                                  wm.atoms.net_supported,
-                                 wm.atoms.net_wm_fullscreen,
+                                 wm.atoms.net_wm_state_fullscreen,
+                                 wm.atoms.net_wm_state_above,
                                  wm.atoms.net_wm_name,
                                  wm.atoms.net_wm_state,
                                  wm.atoms.net_wm_state,
                                  wm.atoms.net_wm_window_type,
-                                 wm.atoms.net_wm_window_type_dialog];
+                                 wm.atoms.net_wm_window_type_dialog,
+                                 wm.atoms.net_wm_window_type_dock];
         unsafe {
             xlib::XChangeProperty(display,
                                   root,
@@ -379,7 +383,10 @@ impl WindowManager {
     }
 
     fn set_fullscreen(&mut self, client: ClientW, fullscreen: bool) {
-        client.clone().set_fullscreen(Rect::new(0, 0, self.screen_width, self.screen_height),
+        client.clone().set_fullscreen(Rect::new(0,
+                                                0,
+                                                self.screen_width - 2 * self.config.border_width,
+                                                self.screen_height - 2 * self.config.border_width),
                                       fullscreen);
         if !fullscreen {
             self.arrange_windows();
@@ -397,7 +404,9 @@ impl WindowManager {
         if let Some(c) = i {
             let client = self.current_stack[c].clone();
             client.focus(true);
-            client.raise_window();
+            if !client.is_floating() {
+                client.raise_window();
+            }
             let atom = self.atoms.wm_take_focus;
             self.grab_buttons(client.clone(), true);
             client.send_event(atom);
@@ -408,6 +417,15 @@ impl WindowManager {
                          self.current_tag,
                          &self.current_stack,
                          &self.current_focus);
+        for c in &self.special_windows {
+            c.raise_window();
+        }
+
+        for c in &self.clients {
+            if c.is_above() {
+                c.clone().raise_window();
+            }
+        }
     }
 
     pub fn shift_focus(&mut self, inc: c_int) {
@@ -539,6 +557,7 @@ impl WindowManager {
         client.borrow_mut().save_window_size();
         client.set_border_color(self.colors.normal_border_color,
                                 self.colors.focused_border_color);
+        log!("Start to managing client: {}", client.get_title());
         unsafe {
             xlib::XChangeProperty(self.display,
                                   self.root,
@@ -550,9 +569,11 @@ impl WindowManager {
                                   1);
             let mut wc: xlib::XWindowChanges = zeroed();
             wc.border_width = self.config.border_width;
-            xlib::XConfigureWindow(self.display, window, xlib::CWBorderWidth as u32, &mut wc);
-            xlib::XSetWindowBorder(self.display, window, self.colors.normal_border_color);
             self.update_window_type(client.clone());
+            if !(client.is_dock()) {
+                xlib::XConfigureWindow(self.display, window, xlib::CWBorderWidth as u32, &mut wc);
+                xlib::XSetWindowBorder(self.display, window, self.colors.normal_border_color);
+            }
             xlib::XSelectInput(self.display,
                                window,
                                xlib::EnterWindowMask | xlib::FocusChangeMask |
@@ -568,12 +589,18 @@ impl WindowManager {
             }
         }
 
-        self.clients.push(client.clone());
-        self.arrange_windows();
-        client.raise_window();
-        if let Some(index) = self.current_stack.iter().position(|c| c.window() == client.window()) {
-            self.set_focus(Some(index));
+        if client.is_dock() {
+            self.special_windows.push(client.clone());
+        } else {
+            self.clients.push(client.clone());
+            self.arrange_windows();
+            if let Some(index) = self.current_stack
+                .iter()
+                .position(|c| c.window() == client.window()) {
+                self.set_focus(Some(index));
+            }
         }
+        client.raise_window();
     }
 
     fn unmanage(&mut self, client: ClientW, destroy: bool) {
@@ -646,7 +673,8 @@ impl WindowManager {
                     let rect = Rect::new(0,
                                          self.config.bar_height,
                                          self.screen_width - 2 * self.config.border_width,
-                                         self.screen_height - self.config.bar_height);
+                                         self.screen_height - self.config.bar_height -
+                                         2 * self.config.border_width);
                     client.resize(rect, true);
                 } else if !client.is_floating() {
                     log!("Client title {}", client.get_title());
@@ -661,7 +689,6 @@ impl WindowManager {
                     let rect = client.get_rect();
                     client.resize(rect, false);
                     unsafe {
-                        client.raise_window();
                         xlib::XSync(self.display, 0);
                     }
                 }
@@ -670,11 +697,21 @@ impl WindowManager {
     }
 
     fn update_window_type(&mut self, client: ClientW) {
-        log!("updating window type");
+        log!("updating window type {}", client.get_title());
         if let Some(state) = client.get_atom(self.atoms.net_wm_state) {
-            if state == self.atoms.net_wm_fullscreen {
+            if state == self.atoms.net_wm_state_fullscreen {
                 log!("update window type to full screen");
-                self.set_fullscreen(client, true);
+                self.set_fullscreen(client.clone(), true);
+            }
+            if state == self.atoms.net_wm_state_above {
+                client.clone().set_above(true);
+            }
+        }
+        if let Some(tp) = client.get_atom(self.atoms.net_wm_window_type) {
+            if tp == self.atoms.net_wm_window_type_dock {
+                log!("find a dock window");
+                let mut c = client.clone();
+                c.set_dock(true);
             }
         }
     }
@@ -694,8 +731,9 @@ impl WindowManager {
         let client_message: xlib::XClientMessageEvent = xlib::XClientMessageEvent::from(*event);
         if let Some(c) = self.clients.get_client_by_window(client_message.window) {
             if client_message.message_type == self.atoms.net_wm_state {
-                if client_message.data.get_long(1) == self.atoms.net_wm_fullscreen as c_long ||
-                   client_message.data.get_long(2) == self.atoms.net_wm_fullscreen as c_long {
+                if client_message.data.get_long(1) ==
+                   self.atoms.net_wm_state_fullscreen as c_long ||
+                   client_message.data.get_long(2) == self.atoms.net_wm_state_fullscreen as c_long {
                     let fullscreen = client_message.data.get_long(0) == 1 ||
                                      (client_message.data.get_long(0) == 2 && !c.is_fullscreen());
                     log!("Client message: set_fullscreen: {}", fullscreen);
@@ -798,6 +836,7 @@ impl WindowManager {
             let mut xa: xlib::XWindowAttributes = zeroed();
             if xlib::XGetWindowAttributes(self.display, map_request_event.window, &mut xa) == 0 ||
                xa.override_redirect != 0 {
+                log!("Got override redirect.");
                 return;
             }
             if self.clients.get_client_by_window(map_request_event.window).is_none() {
@@ -862,6 +901,7 @@ impl WindowManager {
             prog();
         }
         unsafe {
+            xlib::XSetErrorHandler(Some(util::xerror));
             let mut event: xlib::XEvent = zeroed();
             let display = self.display;
             while xlib::XNextEvent(display, &mut event) == 0 {

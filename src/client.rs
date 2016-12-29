@@ -56,6 +56,8 @@ pub struct Client {
     is_dialog: bool,
     is_maximized: bool,
     is_fullscreen: bool,
+    is_dock: bool,
+    is_above: bool,
     normal_border_color: c_ulong,
     focused_border_color: c_ulong,
     pub display: *mut xlib::Display,
@@ -91,6 +93,8 @@ impl Client {
             is_sticky: false,
             is_maximized: false,
             is_fullscreen: false,
+            is_dock: false,
+            is_above: false,
             focused_border_color: 0,
             normal_border_color: 0,
             old_rect: Rect::default(),
@@ -171,8 +175,16 @@ impl ClientW {
         self.borrow().is_floating
     }
 
+    pub fn is_above(&self) -> bool {
+        self.borrow().is_above
+    }
+
     pub fn is_sticky(&self) -> bool {
         self.borrow().is_sticky
+    }
+
+    pub fn is_dock(&self) -> bool {
+        self.borrow().is_dock
     }
 
     pub fn atoms(&self) -> Rc<Atoms> {
@@ -231,6 +243,14 @@ impl ClientW {
         self.borrow_mut().is_sticky = sticky;
     }
 
+    pub fn set_dock(&mut self, dock: bool) {
+        self.borrow_mut().is_dock = dock;
+    }
+
+    pub fn set_above(&mut self, above: bool) {
+        self.borrow_mut().is_above = above;
+    }
+
     pub fn set_maximized(&mut self, maximized: bool) {
         self.borrow_mut().is_maximized = maximized;
     }
@@ -244,7 +264,7 @@ impl ClientW {
                                       xlib::XA_ATOM,
                                       32,
                                       xlib::PropModeReplace,
-                                      (&self.atoms().net_wm_fullscreen as *const u64) as *const u8,
+                                      (&self.atoms().net_wm_state_fullscreen as *const u64) as *const u8,
                                       1);
             }
             self.borrow_mut().is_fullscreen = true;
@@ -393,6 +413,7 @@ impl ClientW {
     pub fn raise_window(&self) {
         unsafe {
             xlib::XRaiseWindow(self.display(), self.window());
+            xlib::XSync(self.display(), 0);
         }
     }
 
