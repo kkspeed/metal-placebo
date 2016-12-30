@@ -1,7 +1,7 @@
 use std::cell::{Ref, RefCell, RefMut};
 use std::ffi::CString;
 use std::io::Write;
-use std::os::raw::{c_long, c_int, c_uchar, c_uint, c_ulong, c_void, c_char};
+use std::os::raw::{c_long, c_int, c_uchar, c_uint, c_ulong, c_void};
 use std::mem::{size_of, zeroed};
 use std::ptr::{null, null_mut};
 use std::rc::Rc;
@@ -422,9 +422,29 @@ impl ClientW {
         self.borrow_mut().normal_border_color = normal;
     }
 
+    pub fn grab_buttons(&mut self, focused: bool) {
+        unsafe {
+            xlib::XUngrabButton(self.display(),
+                                xlib::AnyButton as c_uint,
+                                xlib::AnyModifier,
+                                self.window());
+            if !focused {
+                xlib::XGrabButton(self.display(),
+                                  xlib::AnyButton as c_uint,
+                                  xlib::AnyModifier,
+                                  self.window(),
+                                  0,
+                                  (xlib::ButtonPressMask | xlib::ButtonReleaseMask) as c_uint,
+                                  xlib::GrabModeAsync,
+                                  xlib::GrabModeAsync,
+                                  0,
+                                  0);
+            }
+        }
+    }
+
     pub fn focus(&self, focus: bool) {
         if focus {
-            let window = self.window();
             unsafe {
                 xlib::XSetWindowBorder(self.display(),
                                        self.window(),
@@ -441,6 +461,7 @@ impl ClientW {
                                      self.window(),
                                      xlib::RevertToPointerRoot,
                                      xlib::CurrentTime);
+                xlib::XRaiseWindow(self.display(), self.window());
             }
         } else {
             unsafe {

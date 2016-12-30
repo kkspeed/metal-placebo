@@ -6,6 +6,7 @@ use x11::{xlib, keysym};
 
 use core::WindowManager;
 use client::{ClientL, ClientW};
+use layout::Layout;
 
 const FOCUSED_BORDER_COLOR: &'static str = "RGBi:0.0/1.0/1.0";
 const NORMAL_BORDER_COLOR: &'static str = "RGBi:0.0/0.3/0.3";
@@ -17,7 +18,7 @@ const BAR_HEIGHT: c_int = 15;
 const WINDOW_MOVE_DELTA: c_int = 15;
 const WINDOW_EXPAND_DELTA: c_int = 10;
 
-pub const MOD_MASK: c_uint = xlib::Mod4Mask;
+pub const MOD_MASK: c_uint = xlib::Mod1Mask;
 
 #[allow(unused_variables)]
 const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))] =
@@ -38,12 +39,12 @@ const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))] =
       (MOD_MASK,
        keysym::XK_Return,
        &|w| {
-        if let Some(focus) = w.current_focus {
-            if w.current_tag == TAG_OVERVIEW && w.current_stack.len() > focus {
-                let client = w.current_stack[focus].clone();
-                w.select_tag(client.tag());
-            } else {
-                w.zoom();
+        if w.current_tag != TAG_OVERVIEW {
+            w.zoom();
+        } else {
+            if let Some(current_client) = w.current_focused() {
+                w.select_tag(current_client.tag());
+                w.set_focus(current_client);
             }
         }
     })];
@@ -52,9 +53,6 @@ const TAG_KEYS: &'static (&'static [(c_uint, c_uint, &'static Fn(&mut WindowMana
           &'static [c_uchar]) = &define_tags!(MOD_MASK,
                                               xlib::ShiftMask,
                                               ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']);
-
-pub type LayoutFn = &'static Fn(Rc<Config>, &ClientL, usize, c_int, c_int, c_int, c_int)
-                                -> Vec<(c_int, c_int, c_int, c_int)>;
 
 pub const TAG_OVERVIEW: c_uchar = 0 as c_uchar;
 
@@ -72,7 +70,7 @@ pub struct Config {
     pub tag_default: c_uchar,
     pub tag_description: &'static [(c_uchar, &'static str)],
     pub tag_keys: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))],
-    pub tag_layout: &'static [(c_uchar, LayoutFn)],
+    pub tag_layout: &'static [(c_uchar, &'static str)],
     pub window_expand_delta: c_int,
     pub window_move_delta: c_int,
 }
@@ -153,7 +151,7 @@ impl Config {
         self
     }
 
-    pub fn tag_layout(mut self, layout: &'static [(c_uchar, LayoutFn)]) -> Config {
+    pub fn tag_layout(mut self, layout: &'static [(c_uchar, &'static str)]) -> Config {
         self.tag_layout = layout;
         self
     }

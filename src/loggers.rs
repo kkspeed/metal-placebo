@@ -2,8 +2,9 @@ use std::io::Write;
 use std::os::raw::c_uchar;
 use std::process;
 
+use client::ClientW;
 use config::Config;
-use client::ClientL;
+use core::WindowManager;
 
 pub struct LoggerConfig {
     pub client_color: &'static str,
@@ -55,10 +56,10 @@ impl Default for LoggerConfig {
 pub trait Logger {
     fn dump(&mut self,
             global_config: &Config,
-            all_clients: &ClientL,
+            clients: &Vec<ClientW>,
             current_tag: c_uchar,
-            current_stack: &ClientL,
-            focus: &Option<usize>);
+            current_clients: &Vec<ClientW>,
+            focused: Option<ClientW>);
 }
 
 pub struct DummyLogger;
@@ -74,10 +75,10 @@ impl Logger for DummyLogger {
     #[allow(unused_variables)]
     fn dump(&mut self,
             global_config: &Config,
-            all_clients: &ClientL,
+            clients: &Vec<ClientW>,
             current_tag: c_uchar,
-            current_stack: &ClientL,
-            focus: &Option<usize>) {
+            current_clients: &Vec<ClientW>,
+            focused: Option<ClientW>) {
         // Do nothing.
     }
 }
@@ -104,11 +105,11 @@ impl XMobarLogger {
 impl Logger for XMobarLogger {
     fn dump(&mut self,
             global_config: &Config,
-            all_clients: &ClientL,
+            clients: &Vec<ClientW>,
             current_tag: c_uchar,
-            current_stack: &ClientL,
-            focus: &Option<usize>) {
-        let mut tags: Vec<char> = all_clients.iter().map(|c| c.tag() as char).collect();
+            current_clients: &Vec<ClientW>,
+            focused: Option<ClientW>) {
+        let mut tags: Vec<char> = clients.iter().map(|c| c.tag() as char).collect();
         tags.push(current_tag as char);
         tags.sort();
         tags.dedup();
@@ -142,19 +143,14 @@ impl Logger for XMobarLogger {
         }
 
         result += " :: ";
-        let mut index = 99999;
-        if let &Some(ref i) = focus {
-            index = *i;
-        }
-
-        let mut color;
-        for i in 0..current_stack.len() {
-            if i == index {
-                color = self.config.client_selected_color;
-            } else {
-                color = self.config.client_color;
-            }
-            result += &format!("[<fc={}>{1:.5}</fc>] ", color, current_stack[i].get_title());
+        for c in current_clients {
+            let color = match &focused {
+                &Some(ref c_focused) if c_focused.window() == c.window() => {
+                    self.config.client_selected_color
+                }
+                _ => self.config.client_color,
+            };
+            result += &format!("[<fc={}>{1:.5}</fc>] ", color, c.get_title());
         }
         writeln!(self.child_stdin, "{}", result).unwrap();
     }

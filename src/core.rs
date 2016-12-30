@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::Write;
 use std::mem::zeroed;
 use std::os::raw::{c_int, c_long, c_uchar, c_uint, c_ulong};
@@ -7,127 +8,33 @@ use std::rc::Rc;
 use x11::xlib;
 
 use atoms::Atoms;
-use client::{ClientL, ClientList, ClientW, Rect};
+use client::{ClientL, ClientW, Rect};
 use config::*;
 use util;
 use util::clean_mask;
+use layout::{FullScreen, Layout, Overview, Tile};
 use loggers;
 use loggers::Logger;
+use workspace::{FocusShift, Workspace};
 use xproto;
 
 const TRACE: bool = true;
 
-pub fn tile(config: Rc<Config>,
-            clients: &ClientL,
-            floating_len: usize,
-            pane_x: c_int,
-            pane_y: c_int,
-            pane_width: c_int,
-            pane_height: c_int)
-            -> Vec<(c_int, c_int, c_int, c_int)> {
-    let mut result = vec![(pane_x,
-                           pane_y,
-                           pane_width - 2 * config.border_width,
-                           pane_height - 2 * config.border_width)];
-    let mut count = clients.len() - floating_len;
-    let mut direction = 1;
-    log!("Tiling count: {}", count);
-    while count > 1 {
-        let (last_x, last_y, last_width, last_height) = result.pop().unwrap();
-        let r = (last_x, last_y, last_width, last_height);
-        if direction == 1 {
-            // Horizontal split
-            let p1 = (last_x, last_y, last_width / 2 - config.border_width, last_height);
-            let p2 = (last_x + last_width / 2 + config.border_width,
-                      last_y,
-                      last_width / 2 - config.border_width,
-                      last_height);
-            if p1.2 < 0 {
-                result.push(r.clone());
-                result.push(r);
-            } else {
-                result.push(p1);
-                result.push(p2);
-            }
-        } else {
-            // Vertical split
-            let p2 = (last_x,
-                      last_y + last_height / 2 + config.border_width,
-                      last_width,
-                      last_height / 2 - config.border_width);
-            let p1 = (last_x, last_y, last_width, last_height / 2 - config.border_width);
-            if p2.3 < 0 {
-                result.push(r.clone());
-                result.push(r);
-            } else {
-                result.push(p1);
-                result.push(p2);
-            }
-        }
-        direction = direction ^ 1;
-        count = count - 1;
-    }
-    result
-}
-
-pub fn fullscreen(config: Rc<Config>,
-                  clients: &ClientL,
-                  floating_len: usize,
-                  pane_x: c_int,
-                  pane_y: c_int,
-                  pane_width: c_int,
-                  pane_height: c_int)
-                  -> Vec<(c_int, c_int, c_int, c_int)> {
-    vec![(pane_x,
-          pane_y,
-          pane_width - 2 * config.border_width, 
-          pane_height - 2 * config.border_width); 
-        clients.len() - floating_len]
-}
-
-pub fn overview(config: Rc<Config>,
-                clients: &ClientL,
-                floating_len: usize,
-                pane_x: c_int,
-                pane_y: c_int,
-                pane_width: c_int,
-                pane_height: c_int)
-                -> Vec<(c_int, c_int, c_int, c_int)> {
-    let l = clients.len();
-    let mut result = vec![(pane_x, pane_y, pane_width, pane_height)];
-    let mut direction = 0;
-    while result.len() < l {
-        let mut tmp = Vec::new();
-        for &(x, y, width, height) in &result {
-            if direction == 0 {
-                tmp.push((x, y, width / 2 - config.overview_inset, height - config.overview_inset));
-                tmp.push((x + width / 2 + config.overview_inset,
-                          y,
-                          width / 2 - config.overview_inset,
-                          height - config.overview_inset));
-            } else {
-                tmp.push((x, y, width - config.overview_inset, height / 2 - config.overview_inset));
-                tmp.push((x,
-                          y + height / 2 + config.overview_inset,
-                          width - config.overview_inset,
-                          height / 2 - config.overview_inset));
-            }
-        }
-        tmp.sort_by_key(|c| (c.1, c.0));
-        direction = direction ^ 1;
-        result = tmp;
-    }
-
-    result
-}
-
-fn lookup_layout(config: Rc<Config>, tag: c_uchar) -> Option<LayoutFn> {
-    for &(t, f) in config.tag_layout {
+fn lookup_layout(config: Rc<Config>, tag: c_uchar) -> Box<Layout + 'static> {
+    for &(t, l) in config.tag_layout {
         if t == tag {
-            return Some(f);
+            if l == "fullscreen" {
+                return Box::new(FullScreen);
+            }
+            if l == "tile" {
+                return Box::new(Tile);
+            }
+            if l == "overview" {
+                return Box::new(Overview);
+            }
         }
     }
-    None
+    Box::new(Tile)
 }
 
 struct Colors {
@@ -170,11 +77,12 @@ pub struct WindowManager {
     screen_height: c_int,
     atoms: Rc<Atoms>,
     pub current_tag: c_uchar,
-    pub current_stack: ClientL,
-    pub clients: ClientL,
-    pub current_focus: Option<usize>,
+    // pub current_stack: ClientL,
+    // pub clients: ClientL,
+    // pub current_focus: Option<usize>,
     pub special_windows: ClientL,
     colors: Colors,
+    pub workspaces: HashMap<c_uchar, Workspace>,
     logger: Box<Logger + 'static>,
 }
 
@@ -196,13 +104,22 @@ impl WindowManager {
             screen_height: height,
             atoms: atoms,
             current_tag: config.tag_default,
-            current_stack: Vec::new(),
-            current_focus: None,
-            clients: Vec::new(),
             special_windows: Vec::new(),
             colors: Colors::new(config.clone(), display, root),
             logger: Box::new(loggers::DummyLogger::new(loggers::LoggerConfig::default())),
+            workspaces: HashMap::new(),
         };
+
+        // Add workspaces.
+        for tag in wm.config.tags {
+            let w = Workspace::new(config.clone(), *tag, lookup_layout(config.clone(), *tag));
+            wm.workspaces.insert(*tag, w);
+        }
+
+        wm.workspaces.insert(TAG_OVERVIEW,
+                             Workspace::new(config.clone(),
+                                            TAG_OVERVIEW,
+                                            lookup_layout(config.clone(), TAG_OVERVIEW)));
 
         let net_atom_list = vec![wm.atoms.net_active_window,
                                  wm.atoms.net_client_list,
@@ -304,41 +221,18 @@ impl WindowManager {
         }
     }
 
-    fn grab_buttons(&mut self, client: ClientW, focused: bool) {
-        unsafe {
-            xlib::XUngrabButton(self.display,
-                                xlib::AnyButton as c_uint,
-                                xlib::AnyModifier,
-                                client.borrow().window);
-            if !focused {
-                xlib::XGrabButton(self.display,
-                                  xlib::AnyButton as c_uint,
-                                  xlib::AnyModifier,
-                                  client.borrow().window,
-                                  0,
-                                  (xlib::ButtonPressMask | xlib::ButtonReleaseMask) as c_uint,
-                                  xlib::GrabModeAsync,
-                                  xlib::GrabModeAsync,
-                                  0,
-                                  0);
-            }
-        }
-    }
-
-    fn get_client_index(&self, client: ClientW) -> usize {
-        self.clients
-            .iter()
-            .position(|n| n.borrow().window == client.borrow().window)
-            .unwrap()
-    }
-
     fn update_client_list(&mut self) {
         unsafe {
             xlib::XDeleteProperty(self.display, self.root, self.atoms.net_client_list);
         }
-        for c in &mut self.clients {
-            unsafe {
-                xlib::XChangeProperty(self.display,
+
+        for (_, v) in self.workspaces.iter_mut() {
+            if v.tag == TAG_OVERVIEW {
+                continue;
+            }
+            for c in v.select_clients(&|_| true).iter_mut() {
+                unsafe {
+                    xlib::XChangeProperty(self.display,
                                       self.root,
                                       self.atoms.net_client_list,
                                       xlib::XA_WINDOW,
@@ -346,6 +240,7 @@ impl WindowManager {
                                       xlib::PropModeAppend,
                                       &mut c.borrow_mut().window as *mut c_ulong as *mut c_uchar,
                                       1);
+                }
             }
         }
     }
@@ -355,34 +250,62 @@ impl WindowManager {
     }
 
     pub fn add_tag(&mut self, tag: c_uchar) {
-        if let Some(focused) = self.current_focus {
-            log!("Add tag: {}", tag);
-            self.current_stack[focused].borrow_mut().tag = tag;
+        if self.current_tag != TAG_OVERVIEW {
+            let current_client = {
+                self.current_workspace_mut().detach_current()
+            };
+            if let Some(mut c) = current_client {
+                let workspace = self.workspaces.get_mut(&tag).unwrap();
+                c.borrow_mut().tag = tag;
+                workspace.new_client(c);
+            }
             self.select_tag(tag);
         }
     }
 
     pub fn select_tag(&mut self, tag: c_uchar) {
-        self.current_tag = tag;
-        self.set_focus(None);
+        if tag == TAG_OVERVIEW {
+            log!("Select overview!");
+            let clients = {
+                let mut c = self.all_clients();
+                c.reverse();
+                c
+            };
+            let next_workspace = self.workspaces.get_mut(&tag).unwrap();
+            next_workspace.clear();
+            for c in clients {
+                next_workspace.new_client(c.clone());
+            }
+            self.current_tag = tag;
+        } else {
+            let mut sticky_clients = self.current_workspace().select_clients(&|c| c.is_sticky());
+            for c in sticky_clients.iter() {
+                self.current_workspace_mut().remove_client(c.clone());
+            }
+            self.current_tag = tag;
+            for c in sticky_clients.iter_mut() {
+                c.borrow_mut().tag = tag;
+                self.current_workspace_mut().new_client(c.clone());
+            }
+        }
         self.arrange_windows();
-        self.logger.dump(&self.config,
-                         &self.clients,
-                         self.current_tag,
-                         &self.current_stack,
-                         &self.current_focus);
+        if let Some(c) = self.current_focused() {
+            self.set_focus(c);
+        }
+        self.do_log();
     }
 
     pub fn toggle_maximize(&mut self) {
-        if let Some(index) = self.current_focus {
-            let maximized = self.current_stack[index].is_maximized();
-            self.current_stack[index].set_maximized(!maximized);
-            self.arrange_windows();
-            self.set_focus(Some(index));
+        if self.current_tag != TAG_OVERVIEW {
+            if let Some(mut c) = self.current_focused() {
+                let maximized = c.is_maximized();
+                c.set_maximized(!maximized);
+                self.arrange_windows();
+            }
         }
     }
 
-    fn set_fullscreen(&mut self, client: ClientW, fullscreen: bool) {
+    pub fn set_fullscreen(&mut self, client: ClientW, fullscreen: bool) {
         client.clone().set_fullscreen(Rect::new(0,
                                                 0,
                                                 self.screen_width - 2 * self.config.border_width,
@@ -393,73 +316,37 @@ impl WindowManager {
         }
     }
 
-    fn set_focus(&mut self, i: Option<usize>) {
-        if let Some(prev_focused) = self.current_focus {
-            if prev_focused < self.current_stack.len() {
-                let prev_client = self.current_stack[prev_focused].clone();
-                prev_client.focus(false);
-                self.grab_buttons(prev_client, false);
-            }
+    pub fn set_focus(&mut self, client: ClientW) {
+        {
+            let workspace = self.current_workspace_mut();
+            workspace.set_focus(client.clone());
         }
-        if let Some(c) = i {
-            let client = self.current_stack[c].clone();
-            client.focus(true);
-            if !client.is_floating() {
-                client.raise_window();
-            }
-            let atom = self.atoms.wm_take_focus;
-            self.grab_buttons(client.clone(), true);
-            client.send_event(atom);
-        }
-        self.current_focus = i;
-        self.logger.dump(&self.config,
-                         &self.clients,
-                         self.current_tag,
-                         &self.current_stack,
-                         &self.current_focus);
-        for c in &self.special_windows {
-            c.raise_window();
-        }
-
-        for c in &self.clients {
-            if c.is_above() {
-                c.clone().raise_window();
-            }
-        }
+        client.send_event(self.atoms.wm_take_focus);
+        self.do_log();
     }
 
     pub fn shift_focus(&mut self, inc: c_int) {
-        let len = self.current_stack.len();
-        if len == 0 {
-            return;
+        {
+            let workspace = self.current_workspace_mut();
+            workspace.circle_focus(if inc > 0 {
+                FocusShift::Forward
+            } else {
+                FocusShift::Backward
+            });
         }
-        if let Some(c) = self.current_focus {
-            let next = (c as i32 + inc + len as i32) % len as i32;
-            self.set_focus(Some(next as usize));
-        } else {
-            self.set_focus(None);
-        }
+        self.do_log();
     }
 
     pub fn kill_client(&mut self) {
-        if let Some(c) = self.current_focus {
-            let client: ClientW = self.current_stack[c].clone();
-            let atom = self.atoms.wm_delete;
-            // TODO: REMOVE client record here already!
-            if !client.send_event(atom) {
-                log!("Force kill!");
-                x_disable_error_unsafe!(self.display, {
-                    xlib::XSetCloseDownMode(self.display, xlib::DestroyAll);
-                    xlib::XKillClient(self.display, client.borrow().window);
-                });
-                log!("Force kill done!");
-            }
+        {
+            let workspace = self.current_workspace_mut();
+            workspace.kill_client();
         }
+        self.arrange_windows();
     }
 
     pub fn shift_window(&mut self, delta_x: c_int, delta_y: c_int) {
-        if let Some(index) = self.current_focus {
-            let mut client = self.current_stack[index].clone();
+        if let Some(mut client) = self.current_focused() {
             if !client.is_floating() {
                 return;
             }
@@ -486,8 +373,7 @@ impl WindowManager {
     }
 
     pub fn expand_width(&self, delta: c_int) {
-        if let Some(index) = self.current_focus {
-            let mut client = self.current_stack[index].clone();
+        if let Some(mut client) = self.current_focused() {
             if !client.is_floating() {
                 return;
             }
@@ -505,8 +391,7 @@ impl WindowManager {
     }
 
     pub fn expand_height(&self, delta: c_int) {
-        if let Some(index) = self.current_focus {
-            let mut client = self.current_stack[index].clone();
+        if let Some(mut client) = self.current_focused() {
             if !client.is_floating() {
                 return;
             }
@@ -526,17 +411,52 @@ impl WindowManager {
     }
 
     pub fn zoom(&mut self) {
-        if let Some(c) = self.current_focus {
-            if c < self.current_stack.len() {
-                let mut client = self.current_stack[c].clone();
-                client.borrow_mut().weight = self.current_stack
-                    .iter()
-                    .map(|a| a.borrow().weight)
-                    .max()
-                    .unwrap() + 1;
-                self.arrange_windows();
+        {
+            let workspace = {
+                self.current_workspace_mut()
+            };
+            workspace.zoom();
+        }
+        self.arrange_windows();
+    }
+
+    pub fn current_focused(&self) -> Option<ClientW> {
+        self.current_workspace().get_current_focused()
+    }
+
+    pub fn current_workspace(&self) -> &Workspace {
+        self.workspaces.get(&self.current_tag).unwrap()
+    }
+
+    pub fn current_workspace_mut(&mut self) -> &mut Workspace {
+        self.workspaces.get_mut(&self.current_tag).unwrap()
+    }
+
+    pub fn all_clients(&self) -> Vec<ClientW> {
+        let mut result = Vec::new();
+        for (_, w) in &self.workspaces {
+            if w.tag == TAG_OVERVIEW {
+                continue;
+            }
+            result.extend(w.select_clients(&|_| true));
+        }
+        result
+    }
+
+    pub fn current_clients(&self) -> Vec<ClientW> {
+        self.current_workspace().select_clients(&|_| true)
+    }
+
+    pub fn get_client_by_window(&self, window: xlib::Window) -> Option<ClientW> {
+        for (_, w) in &self.workspaces {
+            if w.tag == TAG_OVERVIEW {
+                continue;
+            }
+            if let Some(c) = w.get_client_by_window(window) {
+                return Some(c);
             }
         }
+        None
     }
 
     fn manage_window(&mut self, window: c_ulong, xa: &xlib::XWindowAttributes) {
@@ -579,7 +499,7 @@ impl WindowManager {
                                xlib::EnterWindowMask | xlib::FocusChangeMask |
                                xlib::PropertyChangeMask |
                                xlib::StructureNotifyMask);
-            self.grab_buttons(client.clone(), false);
+            client.grab_buttons(false);
             xlib::XMapWindow(self.display, window);
         }
 
@@ -592,108 +512,116 @@ impl WindowManager {
         if client.is_dock() {
             self.special_windows.push(client.clone());
         } else {
-            self.clients.push(client.clone());
-            self.arrange_windows();
-            if let Some(index) = self.current_stack
-                .iter()
-                .position(|c| c.window() == client.window()) {
-                self.set_focus(Some(index));
+            {
+                let workspace = self.current_workspace_mut();
+                workspace.new_client(client.clone());
             }
+            self.arrange_windows();
         }
-        client.raise_window();
     }
 
     fn unmanage(&mut self, client: ClientW, destroy: bool) {
-        let index = self.get_client_index(client.clone());
-        if !destroy {
-            x_disable_error_unsafe!(self.display, {
-                client.clone().set_state(xproto::WITHDRAWN_STATE);
-            });
+        if let Some(c) = self.get_client_by_window(client.window()) {
+            if !destroy {
+                x_disable_error_unsafe!(self.display, {
+                    client.clone().set_state(xproto::WITHDRAWN_STATE);
+                });
+            }
+            {
+                if self.current_tag == TAG_OVERVIEW {
+                    let real_workspace = self.workspaces.get_mut(&c.tag()).unwrap();
+                    real_workspace.remove_client(c.clone());
+                }
+                let workspace = self.current_workspace_mut();
+                workspace.remove_client(c);
+            }
+            self.update_client_list();
+            self.arrange_windows();
         }
-        self.clients.remove(index);
-        self.update_client_list();
-        self.arrange_windows();
+    }
+
+    fn do_log(&mut self) {
+        let all_clients = self.all_clients();
+        let current_clients = self.current_clients();
+        let current_focused = self.current_focused();
+        self.logger.dump(&self.config,
+                         &all_clients,
+                         self.current_tag,
+                         &current_clients,
+                         current_focused);
     }
 
     fn arrange_windows(&mut self) {
-        let tag = self.current_tag;
-        self.current_stack = self.clients
-            .select_clients(&|c| c.tag() == tag || tag == TAG_OVERVIEW || c.is_sticky(),
-                            true,
-                            &|c| c.show(true),
-                            &|c| c.show(false));
-        let len = self.current_stack.len();
-        let focus = if len > 0 {
-            let f = if self.current_stack[len - 1].is_floating() &&
-                       self.current_tag != TAG_OVERVIEW {
-                len - 1
-            } else {
-                0
-            };
-            log!("Set focus to: {}, stack_len: {}",
-                 f,
-                 self.current_stack.len());
-            Some(f)
-        } else {
-            log!("Set focus to: None, stack_len: {}",
-                 self.current_stack.len());
-            None
-        };
-        self.set_focus(focus);
-        let floating_windows: ClientL = self.current_stack
-            .iter()
-            .filter_map(|c| if c.is_floating() {
-                Some(c.clone())
-            } else {
-                None
-            })
-            .collect();
-        let t = &tile;
-        let layout_fn = lookup_layout(self.config.clone(), tag).unwrap_or(t);
-        let positions = layout_fn(self.config.clone(),
-                                  &self.current_stack,
-                                  floating_windows.len(),
-                                  0,
+        for (_, mut w) in self.workspaces.iter_mut() {
+            let tag = w.tag;
+            w.show(tag == self.current_tag || self.current_tag == TAG_OVERVIEW);
+        }
+
+        // TODO: Handle sticky windows as well
+        let strategy = self.current_workspace()
+            .get_layout(Rect::new(0,
                                   self.config.bar_height,
                                   self.screen_width,
-                                  self.screen_height - self.config.bar_height);
-
-        for i in 0..self.current_stack.len() {
-            let mut client = self.current_stack[i].clone();
-            if self.current_tag == TAG_OVERVIEW {
-                client.resize(Rect {
-                                  x: positions[i].0,
-                                  y: positions[i].1,
-                                  width: positions[i].2,
-                                  height: positions[i].3,
-                              },
-                              true);
+                                  self.screen_height - self.config.bar_height));
+        for (mut c, r) in strategy {
+            let target_rect = if c.is_maximized() {
+                Rect::new(0,
+                          self.config.bar_height,
+                          self.screen_width - self.config.border_width,
+                          self.screen_height - self.config.bar_height - self.config.border_width)
             } else {
-                if client.is_maximized() {
-                    let rect = Rect::new(0,
-                                         self.config.bar_height,
-                                         self.screen_width - 2 * self.config.border_width,
-                                         self.screen_height - self.config.bar_height -
-                                         2 * self.config.border_width);
-                    client.resize(rect, true);
-                } else if !client.is_floating() {
-                    log!("Client title {}", client.get_title());
-                    client.resize(Rect {
-                                      x: positions[i].0,
-                                      y: positions[i].1,
-                                      width: positions[i].2,
-                                      height: positions[i].3,
-                                  },
-                                  false);
-                } else {
-                    let rect = client.get_rect();
-                    client.resize(rect, false);
-                    unsafe {
-                        xlib::XSync(self.display, 0);
-                    }
-                }
+                r
+            };
+            c.resize(target_rect, false);
+        }
+
+        if self.current_tag != TAG_OVERVIEW {
+            let mut floating_clients = self.current_workspace_mut()
+                .select_clients(&|c| c.is_floating() == true);
+            for fc in floating_clients.iter_mut() {
+                let rect = fc.get_rect();
+                fc.resize(rect, false);
+                fc.raise_window();
             }
         }
+        // for i in 0..self.current_stack.len() {
+        // let mut client = self.current_stack[i].clone();
+        // if self.current_tag == TAG_OVERVIEW {
+        // client.resize(Rect {
+        // x: positions[i].0,
+        // y: positions[i].1,
+        // width: positions[i].2,
+        // height: positions[i].3,
+        // },
+        // true);
+        // } else {
+        // if client.is_maximized() {
+        // let rect = Rect::new(0,
+        // self.config.bar_height,
+        // self.screen_width - 2 * self.config.border_width,
+        // self.screen_height - self.config.bar_height -
+        // 2 * self.config.border_width);
+        // client.resize(rect, true);
+        // } else if !client.is_floating() {
+        // log!("Client title {}", client.get_title());
+        // client.resize(Rect {
+        // x: positions[i].0,
+        // y: positions[i].1,
+        // width: positions[i].2,
+        // height: positions[i].3,
+        // },
+        // false);
+        // } else {
+        // let rect = client.get_rect();
+        // client.resize(rect, false);
+        // unsafe {
+        // xlib::XSync(self.display, 0);
+        // }
+        // }
+        // }
+        // }
+        //
+        //
     }
 
     fn update_window_type(&mut self, client: ClientW) {
@@ -718,18 +646,17 @@ impl WindowManager {
 
     fn on_button_press(&mut self, event: &xlib::XEvent) {
         trace!("[on_button_press]");
+        let workspace = self.current_workspace_mut();
         let button_event = xlib::XButtonPressedEvent::from(*event);
-        let position =
-            self.current_stack.iter().position(|x| x.borrow().window == button_event.window);
-        if let Some(i) = position {
-            self.set_focus(Some(i));
+        if let Some(c) = workspace.get_client_by_window(button_event.window) {
+            workspace.set_focus(c);
         }
     }
 
     fn on_client_message(&mut self, event: &xlib::XEvent) {
         trace!("[on_client_message]");
         let client_message: xlib::XClientMessageEvent = xlib::XClientMessageEvent::from(*event);
-        if let Some(c) = self.clients.get_client_by_window(client_message.window) {
+        if let Some(c) = self.get_client_by_window(client_message.window) {
             if client_message.message_type == self.atoms.net_wm_state {
                 if client_message.data.get_long(1) ==
                    self.atoms.net_wm_state_fullscreen as c_long ||
@@ -746,8 +673,9 @@ impl WindowManager {
     fn on_configure_request(&mut self, event: &xlib::XEvent) {
         trace!("[on_configure_request]");
         let mut xa: xlib::XWindowChanges = unsafe { zeroed() };
+        let workspace = self.workspaces.get(&self.current_tag).unwrap();
         let configure_request_event = xlib::XConfigureRequestEvent::from(*event);
-        if let Some(mut c) = self.clients.get_client_by_window(configure_request_event.window) {
+        if let Some(mut c) = workspace.get_client_by_window(configure_request_event.window) {
             if (c.is_sticky() || c.tag() == self.current_tag) && c.is_floating() {
                 c.show(true);
             } else {
@@ -776,7 +704,7 @@ impl WindowManager {
     fn on_destroy_notify(&mut self, event: &xlib::XEvent) {
         trace!("[on_destroy_notify]");
         let destroy_window_event = xlib::XDestroyWindowEvent::from(*event);
-        if let Some(c) = self.clients.get_client_by_window(destroy_window_event.window) {
+        if let Some(c) = self.get_client_by_window(destroy_window_event.window) {
             self.unmanage(c.clone(), true);
         }
     }
@@ -791,8 +719,9 @@ impl WindowManager {
 
     fn on_focus_in(&mut self, event: &xlib::XEvent) {
         trace!("[on_focus_in]");
-        let focus = self.current_focus;
-        self.set_focus(focus);
+        if let Some(client) = self.current_focused() {
+            self.current_workspace_mut().set_focus(client);
+        }
     }
 
     fn on_key_press(&mut self, event: &xlib::XEvent) {
@@ -839,7 +768,7 @@ impl WindowManager {
                 log!("Got override redirect.");
                 return;
             }
-            if self.clients.get_client_by_window(map_request_event.window).is_none() {
+            if self.get_client_by_window(map_request_event.window).is_none() {
                 self.manage_window(map_request_event.window, &xa);
             }
         }
@@ -854,15 +783,11 @@ impl WindowManager {
         trace!("[on_property_notify] atom: {}\n atoms: {:?}",
                property_event.atom,
                self.atoms);
-        if let Some(c) = self.clients.get_client_by_window(property_event.window) {
+        if let Some(c) = self.get_client_by_window(property_event.window) {
             if property_event.atom == xlib::XA_WM_NAME ||
                property_event.atom == self.atoms.net_wm_name {
                 c.clone().update_title();
-                self.logger.dump(&self.config,
-                                 &self.clients,
-                                 self.current_tag,
-                                 &self.current_stack,
-                                 &self.current_focus);
+                self.do_log();
             } else if property_event.atom == xlib::XA_WM_NORMAL_HINTS {
                 // TODO: This is a very ugly solution to invalidate the window that requires
                 // resize to repaint, especially gtk 2 windows: emacs, lxterminal etc.
@@ -880,23 +805,19 @@ impl WindowManager {
     fn on_unmap_notify(&mut self, event: &xlib::XEvent) {
         trace!("[on_unmap_notify]");
         let unmap_event = xlib::XUnmapEvent::from(*event);
-        if let Some(c) = self.clients.get_client_by_window(unmap_event.window) {
+        if let Some(c) = self.get_client_by_window(unmap_event.window) {
             if unmap_event.send_event != 0 {
                 c.clone().set_state(xproto::WITHDRAWN_STATE);
             } else {
                 log!("From unmap notify!");
-                self.set_focus(None);
                 self.unmanage(c.clone(), false);
             }
         }
+        self.do_log();
     }
 
     pub fn run(&mut self) {
-        self.logger.dump(&self.config,
-                         &self.clients,
-                         self.current_tag,
-                         &self.current_stack,
-                         &self.current_focus);
+        self.do_log();
         for prog in self.config.start_programs {
             prog();
         }

@@ -7,6 +7,9 @@ pub mod client;
 pub mod core;
 pub mod config;
 pub mod loggers;
+pub mod layout;
+pub mod workspace;
 mod atoms;
+
 #[allow(dead_code, non_upper_case_globals)]
 mod xproto;

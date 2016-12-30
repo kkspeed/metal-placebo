@@ -9,6 +9,7 @@ use rswm::client::ClientW;
 use rswm::config::*;
 use rswm::core;
 use rswm::loggers;
+use rswm::layout::{Tile, FullScreen, Layout};
 use rswm::util::spawn;
 
 const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut core::WindowManager))] =
@@ -32,8 +33,8 @@ const START_PROGRAMS: &'static [&'static Fn()] =
       &|| spawn("tilda", &["--hidden"]),
       &|| spawn("/usr/lib/polkit-kde/polkit-kde-authentication-agent-1", &[])];
 
-const TAG_LAYOUT: &'static [(c_uchar, LayoutFn)] = &[('9' as c_uchar, &core::fullscreen),
-                                                     (TAG_OVERVIEW, &core::overview)];
+const TAG_LAYOUT: &'static [(c_uchar, &'static str)] = &[('9' as c_uchar, "fullscreen"),
+                                                         (TAG_OVERVIEW as c_uchar, "overview")];
 
 const RULES: &'static [(&'static Fn(&ClientW) -> bool, &'static Fn(&mut ClientW))] =
     &[(&|c| c.get_class() == "Gimp", &|c| c.set_floating(true)),
