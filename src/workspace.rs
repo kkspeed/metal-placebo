@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::io::Write;
+use std::mem::zeroed;
 use std::os::raw::c_uchar;
 use std::rc::Rc;
 
@@ -57,6 +58,7 @@ impl Workspace {
                 }
             }
         }
+        self.restack();
     }
 
     pub fn clear(&mut self) {
@@ -123,9 +125,14 @@ impl Workspace {
         }
     }
 
-    pub fn new_client(&mut self, client: ClientW) {
-        self.clients_prev.push_front(client);
-        while self.clients_prev.len() > 0 {
+    pub fn new_client(&mut self, client: ClientW, at_focus: bool) {
+        if !at_focus {
+            self.clients_prev.push_front(client);
+            while self.clients_prev.len() > 0 {
+                self.shift_focus(FocusShift::Backward);
+            }
+        } else {
+            self.clients_prev.push_back(client);
             self.shift_focus(FocusShift::Backward);
         }
     }
@@ -161,10 +168,43 @@ impl Workspace {
         }
     }
 
+    pub fn restack(&mut self) {
+        let mut wc: xlib::XWindowChanges = unsafe { zeroed() };
+        if let Some(focus) = self.get_current_focused() {
+            if focus.is_floating() {
+                return;
+            }
+            unsafe {
+                xlib::XLowerWindow(focus.display(), focus.window());
+            }
+            wc.sibling = focus.window();
+            wc.stack_mode = xlib::Below;
+            for c in self.select_clients(&|c| c.window() != focus.window()) {
+                if !c.is_floating() {
+                    unsafe {
+                        xlib::XConfigureWindow(focus.display(),
+                                               c.window(),
+                                               xlib::CWSibling as u32 | xlib::CWStackMode as u32,
+                                               &mut wc);
+                    }
+                    wc.sibling = c.window();
+                }
+            }
+            unsafe {
+                let mut xevent: xlib::XEvent = zeroed();
+                xlib::XSync(focus.display(), 0);
+                while xlib::XCheckMaskEvent(focus.display(),
+                                            xlib::EnterWindowMask,
+                                            &mut xevent) != 0 {}
+            }
+        }
+    }
+
     pub fn set_focus(&mut self, client: ClientW) {
         if let &mut Some(ref mut c) = &mut self.client_current {
             if c.window() == client.window() {
                 c.focus(true);
+                c.grab_buttons(true);
                 return;
             }
         }
@@ -249,7 +289,7 @@ impl Workspace {
 
     pub fn zoom(&mut self) {
         if let Some(c) = self.detach_current() {
-            self.new_client(c);
+            self.new_client(c, false);
         }
     }
 }

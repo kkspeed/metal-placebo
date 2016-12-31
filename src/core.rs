@@ -257,7 +257,7 @@ impl WindowManager {
             if let Some(mut c) = current_client {
                 let workspace = self.workspaces.get_mut(&tag).unwrap();
                 c.borrow_mut().tag = tag;
-                workspace.new_client(c);
+                workspace.new_client(c, false);
             }
             self.select_tag(tag);
         }
@@ -265,17 +265,6 @@ impl WindowManager {
 
     pub fn select_tag(&mut self, tag: c_uchar) {
         if tag == TAG_OVERVIEW {
-            log!("Select overview!");
-            let clients = {
-                let mut c = self.all_clients();
-                c.reverse();
-                c
-            };
-            let next_workspace = self.workspaces.get_mut(&tag).unwrap();
-            next_workspace.clear();
-            for c in clients {
-                next_workspace.new_client(c.clone());
-            }
             self.current_tag = tag;
         } else {
             let mut sticky_clients = self.current_workspace().select_clients(&|c| c.is_sticky());
@@ -285,7 +274,7 @@ impl WindowManager {
             self.current_tag = tag;
             for c in sticky_clients.iter_mut() {
                 c.borrow_mut().tag = tag;
-                self.current_workspace_mut().new_client(c.clone());
+                self.current_workspace_mut().new_client(c.clone(), true);
             }
         }
         self.arrange_windows();
@@ -320,6 +309,7 @@ impl WindowManager {
         {
             let workspace = self.current_workspace_mut();
             workspace.set_focus(client.clone());
+            workspace.restack();
         }
         client.send_event(self.atoms.wm_take_focus);
         self.do_log();
@@ -513,8 +503,8 @@ impl WindowManager {
             self.special_windows.push(client.clone());
         } else {
             {
-                let workspace = self.current_workspace_mut();
-                workspace.new_client(client.clone());
+                let workspace = self.workspaces.get_mut(&tag).unwrap();
+                workspace.new_client(client.clone(), client.is_floating());
             }
             self.arrange_windows();
         }
@@ -557,18 +547,37 @@ impl WindowManager {
             w.show(tag == self.current_tag || self.current_tag == TAG_OVERVIEW);
         }
 
+        if self.current_tag == TAG_OVERVIEW {
+            let clients = {
+                let mut c = self.all_clients();
+                c.sort_by_key(|c| -(c.tag() as c_int));
+                c
+            };
+            let next_workspace = self.workspaces.get_mut(&self.current_tag).unwrap();
+            next_workspace.clear();
+            for c in clients {
+                next_workspace.new_client(c.clone(), false);
+            }
+        }
+
         // TODO: Handle sticky windows as well
         let strategy = self.current_workspace()
             .get_layout(Rect::new(0,
                                   self.config.bar_height,
-                                  self.screen_width,
-                                  self.screen_height - self.config.bar_height));
+                                  self.screen_width - 2 * self.config.border_width,
+                                  self.screen_height - self.config.bar_height -
+                                  2 * self.config.border_width));
         for (mut c, r) in strategy {
+            if self.current_tag == TAG_OVERVIEW {
+                c.resize(r, true);
+                continue;
+            }
             let target_rect = if c.is_maximized() {
                 Rect::new(0,
                           self.config.bar_height,
-                          self.screen_width - self.config.border_width,
-                          self.screen_height - self.config.bar_height - self.config.border_width)
+                          self.screen_width - 2 * self.config.border_width,
+                          self.screen_height - self.config.bar_height -
+                          2 * self.config.border_width)
             } else {
                 r
             };
@@ -584,6 +593,8 @@ impl WindowManager {
                 fc.raise_window();
             }
         }
+
+        self.current_workspace_mut().restack();
         // for i in 0..self.current_stack.len() {
         // let mut client = self.current_stack[i].clone();
         // if self.current_tag == TAG_OVERVIEW {
@@ -650,12 +661,29 @@ impl WindowManager {
         let button_event = xlib::XButtonPressedEvent::from(*event);
         if let Some(c) = workspace.get_client_by_window(button_event.window) {
             workspace.set_focus(c);
+            workspace.restack();
         }
     }
 
     fn on_client_message(&mut self, event: &xlib::XEvent) {
         trace!("[on_client_message]");
         let client_message: xlib::XClientMessageEvent = xlib::XClientMessageEvent::from(*event);
+        log!("Got client message atom {}, window: {}, state: {}, {}, {}",
+             client_message.message_type,
+             client_message.window,
+             client_message.data.get_long(0),
+             client_message.data.get_long(1),
+             client_message.data.get_long(2));
+        if let Some(title) = util::get_text_prop(self.display,
+                                                 client_message.window,
+                                                 self.atoms.net_wm_name) {
+            log!(" window {} message name: {}, state: {}, {}, {}",
+                 client_message.window,
+                 title,
+                 client_message.data.get_long(0),
+                 client_message.data.get_long(1),
+                 client_message.data.get_long(2));
+        }
         if let Some(c) = self.get_client_by_window(client_message.window) {
             if client_message.message_type == self.atoms.net_wm_state {
                 if client_message.data.get_long(1) ==
@@ -721,6 +749,7 @@ impl WindowManager {
         trace!("[on_focus_in]");
         if let Some(client) = self.current_focused() {
             self.current_workspace_mut().set_focus(client);
+            self.current_workspace_mut().restack();
         }
     }
 

@@ -461,7 +461,6 @@ impl ClientW {
                                      self.window(),
                                      xlib::RevertToPointerRoot,
                                      xlib::CurrentTime);
-                xlib::XRaiseWindow(self.display(), self.window());
             }
         } else {
             unsafe {

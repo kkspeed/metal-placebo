@@ -117,27 +117,27 @@ impl Logger for XMobarLogger {
         for t in &tags {
             if *t == current_tag as char {
                 if current_tag == 0 {
-                    result += &format!("<fc={}> Overview </fc> |", self.config.tag_selected_color);
+                    result += &format!("<fc={}> Overview </fc>|", self.config.tag_selected_color);
                 } else {
                     result += &if let Some(description) =
                         global_config.get_description(*t as c_uchar) {
-                        format!("<fc={}> {} - {} </fc> |",
+                        format!("<fc={}> {} - {} </fc>|",
                                 self.config.tag_selected_color,
                                 t,
                                 description)
                     } else {
-                        format!("<fc={}> {} </fc> |", self.config.tag_selected_color, t)
+                        format!("<fc={}> {} </fc>|", self.config.tag_selected_color, t)
                     };
                 }
             } else {
                 result += &if let Some(description) =
                     global_config.get_description(*t as c_uchar) {
-                    format!("<fc={}> {} - {} </fc> |",
+                    format!("<fc={}> {} - {} </fc>|",
                             self.config.tag_color,
                             t,
                             description)
                 } else {
-                    format!("<fc={}> {} </fc> |", self.config.tag_color, t)
+                    format!("<fc={}> {} </fc>|", self.config.tag_color, t)
                 };
             }
         }

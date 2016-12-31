@@ -94,7 +94,6 @@ pub fn get_text_prop(display: *mut xlib::Display,
         }
         // TODO: Possible memory leak.
         // xlib::XFree(name.value as *mut c_void);
-        log!("Free done!");
     }
     result
 }
