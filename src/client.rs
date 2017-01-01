@@ -424,6 +424,13 @@ impl ClientW {
         }
     }
 
+    pub fn lower_window(&self) {
+        unsafe {
+            xlib::XLowerWindow(self.display(), self.window());
+            xlib::XSync(self.display(), 0);
+        }
+    }
+
     pub fn set_border_color(&mut self, normal: c_ulong, focused: c_ulong) {
         self.borrow_mut().focused_border_color = focused;
         self.borrow_mut().normal_border_color = normal;

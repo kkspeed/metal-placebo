@@ -71,15 +71,13 @@ impl Colors {
 pub struct WindowManager {
     config: Rc<Config>,
     display: *mut xlib::Display,
+    anchor_window: c_ulong,
     screen: c_int,
     root: c_ulong,
     screen_width: c_int,
     screen_height: c_int,
     atoms: Rc<Atoms>,
     pub current_tag: c_uchar,
-    // pub current_stack: ClientL,
-    // pub clients: ClientL,
-    // pub current_focus: Option<usize>,
     pub special_windows: ClientL,
     colors: Colors,
     pub workspaces: HashMap<c_uchar, Workspace>,
@@ -98,6 +96,7 @@ impl WindowManager {
         let mut wm = WindowManager {
             config: config.clone(),
             display: display,
+            anchor_window: 0,
             screen: screen,
             root: root,
             screen_width: width,
@@ -110,14 +109,29 @@ impl WindowManager {
             workspaces: HashMap::new(),
         };
 
+        wm.anchor_window = unsafe {
+            xlib::XCreateSimpleWindow(wm.display,
+                                      wm.root,
+                                      0,
+                                      0,
+                                      1,
+                                      1,
+                                      0,
+                                      wm.colors.normal_border_color,
+                                      wm.colors.normal_border_color)
+        };
         // Add workspaces.
         for tag in wm.config.tags {
-            let w = Workspace::new(config.clone(), *tag, lookup_layout(config.clone(), *tag));
+            let w = Workspace::new(config.clone(),
+                                   wm.anchor_window,
+                                   *tag,
+                                   lookup_layout(config.clone(), *tag));
             wm.workspaces.insert(*tag, w);
         }
 
         wm.workspaces.insert(TAG_OVERVIEW,
                              Workspace::new(config.clone(),
+                                            wm.anchor_window,
                                             TAG_OVERVIEW,
                                             lookup_layout(config.clone(), TAG_OVERVIEW)));
 
@@ -591,6 +605,12 @@ impl WindowManager {
                 let rect = fc.get_rect();
                 fc.resize(rect, false);
                 fc.raise_window();
+            }
+        }
+
+        for c in self.current_clients() {
+            if c.is_fullscreen() {
+                c.raise_window();
             }
         }
 

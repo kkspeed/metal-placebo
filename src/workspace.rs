@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::io::Write;
 use std::mem::zeroed;
-use std::os::raw::c_uchar;
+use std::os::raw::{c_int, c_uchar};
 use std::rc::Rc;
 
 use client::{ClientW, Rect};
@@ -17,6 +17,7 @@ pub enum FocusShift {
 }
 
 pub struct Workspace {
+    anchor_window: xlib::Window,
     pub config: Rc<Config>,
     client_current: Option<ClientW>,
     clients_prev: VecDeque<ClientW>,
@@ -26,8 +27,13 @@ pub struct Workspace {
 }
 
 impl Workspace {
-    pub fn new(config: Rc<Config>, tag: c_uchar, layout: Box<Layout + 'static>) -> Self {
+    pub fn new(config: Rc<Config>,
+               anchor_window: xlib::Window,
+               tag: c_uchar,
+               layout: Box<Layout + 'static>)
+               -> Self {
         Workspace {
+            anchor_window: anchor_window,
             client_current: None,
             clients_prev: VecDeque::new(),
             clients_next: VecDeque::new(),
@@ -169,28 +175,22 @@ impl Workspace {
     }
 
     pub fn restack(&mut self) {
-        let mut wc: xlib::XWindowChanges = unsafe { zeroed() };
         if let Some(focus) = self.get_current_focused() {
+            focus.focus(true);
             if focus.is_floating() {
+                focus.raise_window();
                 return;
             }
+
+            let mut to_restack = vec![self.anchor_window, focus.window()];
+            to_restack.extend(
+                self.select_clients(&|c| {
+                        c.window() != focus.window() && !c.is_floating()
+                    }).iter().map(|c| c.window()));
             unsafe {
-                xlib::XLowerWindow(focus.display(), focus.window());
-            }
-            wc.sibling = focus.window();
-            wc.stack_mode = xlib::Below;
-            for c in self.select_clients(&|c| c.window() != focus.window()) {
-                if !c.is_floating() {
-                    unsafe {
-                        xlib::XConfigureWindow(focus.display(),
-                                               c.window(),
-                                               xlib::CWSibling as u32 | xlib::CWStackMode as u32,
-                                               &mut wc);
-                    }
-                    wc.sibling = c.window();
-                }
-            }
-            unsafe {
+                xlib::XRestackWindows(focus.display(),
+                                      to_restack.as_mut_ptr(),
+                                      to_restack.len() as c_int);
                 let mut xevent: xlib::XEvent = zeroed();
                 xlib::XSync(focus.display(), 0);
                 while xlib::XCheckMaskEvent(focus.display(),
@@ -203,7 +203,7 @@ impl Workspace {
     pub fn set_focus(&mut self, client: ClientW) {
         if let &mut Some(ref mut c) = &mut self.client_current {
             if c.window() == client.window() {
-                c.focus(true);
+                // c.focus(true);
                 c.grab_buttons(true);
                 return;
             }
@@ -261,7 +261,7 @@ impl Workspace {
             FocusShift::Forward => {
                 if let Some(mut next_client) = self.clients_next.pop_front() {
                     let current = self.client_current.take();
-                    next_client.focus(true);
+                    // next_client.focus(true);
                     next_client.grab_buttons(true);
                     self.client_current = Some(next_client);
                     self.push_prev(current.map(|c| {
@@ -274,7 +274,7 @@ impl Workspace {
             FocusShift::Backward => {
                 if let Some(mut prev_client) = self.clients_prev.pop_back() {
                     let current = self.client_current.take();
-                    prev_client.focus(true);
+                    // prev_client.focus(true);
                     prev_client.grab_buttons(true);
                     self.client_current = Some(prev_client);
                     self.push_next(current.map(|c| {
