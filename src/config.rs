@@ -18,7 +18,7 @@ const BAR_HEIGHT: c_int = 15;
 const WINDOW_MOVE_DELTA: c_int = 15;
 const WINDOW_EXPAND_DELTA: c_int = 10;
 
-pub const MOD_MASK: c_uint = xlib::Mod1Mask;
+pub const MOD_MASK: c_uint = xlib::Mod4Mask;
 
 #[allow(unused_variables)]
 const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))] =

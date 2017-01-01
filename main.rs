@@ -14,12 +14,13 @@ use rswm::util::spawn;
 
 const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut core::WindowManager))] =
     &[(MOD_MASK, keysym::XK_r, &|_| spawn("dmenu_run", &[])),
-      (MOD_MASK, keysym::XK_t, &|_| spawn("xterm", &[])),
+      (MOD_MASK, keysym::XK_t, &|_| spawn("urxvt", &[])),
       (MOD_MASK, keysym::XK_Print, &|_| spawn("scrot", &["-e", "mv $f ~/"])),
       (MOD_MASK | xlib::Mod1Mask,
        keysym::XK_Print,
        &|_| spawn("scrot", &["-s", "-e", "mv $f ~/"])),
       (MOD_MASK, keysym::XK_f, &|_| spawn("pcmanfm", &[])),
+      (MOD_MASK, keysym::XK_l, &|_| spawn("i3lock", &[])),
       (0, keysym::XF86XK_MonBrightnessUp, &|_| spawn("xbrightness", &["+10000"])),
       (0, keysym::XF86XK_MonBrightnessDown, &|_| spawn("xbrightness", &["-10000"])),
       (0, keysym::XF86XK_AudioRaiseVolume, &|_| spawn("amixer", &["set", "Master", "5000+"])),
@@ -58,7 +59,7 @@ const TAG_DESCRIPTION: &'static [(c_uchar, &'static str)] = &[('1' as c_uchar, "
 fn main() {
     let config = Config::default()
         .border_width(3)
-        .bar_height(30)
+        .bar_height(31)
         .addtional_keys(KEYS)
         .start_programs(START_PROGRAMS)
         .tag_keys(TAG_KEYS)
