@@ -305,6 +305,7 @@ impl ClientW {
         let rect = self.get_rect();
         if visible {
             self.move_window(rect.x, rect.y, false);
+            self.invalidate();
         } else {
             self.move_window(-10 * rect.width, rect.y, false);
         }
@@ -322,6 +323,12 @@ impl ClientW {
         }
         unsafe {
             xlib::XMoveWindow(self.borrow().display, self.borrow().window, x, y);
+        }
+    }
+
+    pub fn invalidate(&self) {
+        unsafe {
+            xlib::XClearArea(self.display(), self.window(), 0, 0, 1, 1, 1);
         }
     }
 
