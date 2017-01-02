@@ -832,21 +832,15 @@ impl WindowManager {
         trace!("[on_property_notify] atom: {}\n atoms: {:?}",
                property_event.atom,
                self.atoms);
-        if let Some(c) = self.get_client_by_window(property_event.window) {
+        if let Some(mut c) = self.get_client_by_window(property_event.window).as_mut() {
             if property_event.atom == xlib::XA_WM_NAME ||
                property_event.atom == self.atoms.net_wm_name {
-                c.clone().update_title();
+                c.update_title();
                 self.do_log();
             } else if property_event.atom == xlib::XA_WM_NORMAL_HINTS {
-                // TODO: This is a very ugly solution to invalidate the window that requires
-                // resize to repaint, especially gtk 2 windows: emacs, lxterminal etc.
-                let mut rect = c.get_rect();
-                rect.width = rect.width + 1;
-                c.clone().resize(rect.clone(), false);
-                rect.width = rect.width - 1;
-                c.clone().resize(rect, false);
+                c.invalidate();
             } else if property_event.atom == self.atoms.net_wm_window_type {
-                self.update_window_type(c);
+                self.update_window_type(c.clone());
             }
         }
     }

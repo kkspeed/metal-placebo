@@ -326,10 +326,14 @@ impl ClientW {
         }
     }
 
-    pub fn invalidate(&self) {
-        unsafe {
-            xlib::XClearArea(self.display(), self.window(), 0, 0, 1, 1, 1);
-        }
+    pub fn invalidate(&mut self) {
+        // TODO: This is a very ugly solution to invalidate the window that requires
+        // resize to repaint, especially gtk 2 windows: emacs, lxterminal etc.
+        let mut rect = self.get_rect();
+        rect.width = rect.width + 1;
+        self.resize(rect.clone(), false);
+        rect.width = rect.width - 1;
+        self.resize(rect, false);
     }
 
     pub fn resize(&mut self, rect: Rect, temporary: bool) {
