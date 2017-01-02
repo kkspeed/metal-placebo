@@ -87,32 +87,25 @@ impl Workspace {
     }
 
     pub fn get_client_by_window(&self, window: xlib::Window) -> Option<ClientW> {
-        if let &Some(ref c) = &self.client_current {
+        if let Some(c) = self.client_current.as_ref() {
             if c.window() == window {
                 return Some(c.clone());
             }
         }
-
-        for c in &self.clients_prev {
-            if c.window() == window {
-                return Some(c.clone());
-            }
-        }
-
-        for c in &self.clients_next {
-            if c.window() == window {
-                return Some(c.clone());
-            }
-        }
-
-        None
+        self.clients_prev
+            .iter()
+            .find(|c| c.window() == window)
+            .map(|c| c.clone())
+            .or_else(|| {
+                self.clients_next
+                    .iter()
+                    .find(|c| c.window() == window)
+                    .map(|c| c.clone())
+            })
     }
 
     pub fn get_current_focused(&self) -> Option<ClientW> {
-        if let &Some(ref c) = &self.client_current {
-            return Some(c.clone());
-        }
-        None
+        self.client_current.as_ref().map(|c| c.clone())
     }
 
     pub fn get_layout(&self, rect: Rect) -> Vec<(ClientW, Rect)> {
@@ -120,7 +113,7 @@ impl Workspace {
     }
 
     pub fn kill_client(&mut self) {
-        if let Some(client) = self.detach_current() {
+        self.detach_current().map(|client| {
             let atom = client.atoms().wm_delete;
             if !client.send_event(atom) {
                 x_disable_error_unsafe!(client.display(), {
@@ -128,7 +121,7 @@ impl Workspace {
                     xlib::XKillClient(client.display(), client.borrow().window);
                 });
             }
-        }
+        });
     }
 
     pub fn new_client(&mut self, client: ClientW, at_focus: bool) {
@@ -247,7 +240,7 @@ impl Workspace {
             c.show(visible);
         }
 
-        if let &mut Some(ref mut c) = &mut self.client_current {
+        if let Some(c) = self.client_current.as_mut() {
             c.show(visible);
         }
 
@@ -261,7 +254,6 @@ impl Workspace {
             FocusShift::Forward => {
                 if let Some(mut next_client) = self.clients_next.pop_front() {
                     let current = self.client_current.take();
-                    // next_client.focus(true);
                     next_client.grab_buttons(true);
                     self.client_current = Some(next_client);
                     self.push_prev(current.map(|c| {
@@ -274,7 +266,6 @@ impl Workspace {
             FocusShift::Backward => {
                 if let Some(mut prev_client) = self.clients_prev.pop_back() {
                     let current = self.client_current.take();
-                    // prev_client.focus(true);
                     prev_client.grab_buttons(true);
                     self.client_current = Some(prev_client);
                     self.push_next(current.map(|c| {
@@ -288,8 +279,6 @@ impl Workspace {
     }
 
     pub fn zoom(&mut self) {
-        if let Some(c) = self.detach_current() {
-            self.new_client(c, false);
-        }
+        self.detach_current().map(|c| self.new_client(c, false));
     }
 }
