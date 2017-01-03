@@ -1,6 +1,5 @@
 use std::os::raw::{c_int, c_uchar, c_uint};
 use std::process;
-use std::rc::Rc;
 
 use x11::{xlib, keysym};
 

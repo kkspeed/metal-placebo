@@ -4,6 +4,7 @@ use std::mem::zeroed;
 use std::os::raw::{c_int, c_uchar};
 use std::rc::Rc;
 
+use atoms;
 use client::{ClientW, Rect};
 use config::Config;
 use layout::Layout;
@@ -114,7 +115,7 @@ impl Workspace {
 
     pub fn kill_client(&mut self) {
         self.detach_current().map(|client| {
-            let atom = client.atoms().wm_delete;
+            let atom = atoms::wm_delete();
             if !client.send_event(atom) {
                 x_disable_error_unsafe!(client.display(), {
                     xlib::XSetCloseDownMode(client.display(), xlib::DestroyAll);

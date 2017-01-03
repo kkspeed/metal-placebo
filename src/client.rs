@@ -9,7 +9,7 @@ use std::slice;
 
 use x11::xlib;
 
-use atoms::Atoms;
+use atoms;
 use config::Config;
 use util;
 
@@ -44,7 +44,6 @@ impl Rect {
 }
 
 pub struct Client {
-    pub atoms: Rc<Atoms>,
     config: Rc<Config>,
     pub tag: c_uchar,
     pub title: String,
@@ -74,8 +73,7 @@ impl Client {
                display: *mut xlib::Display,
                root: xlib::Window,
                window: c_ulong,
-               tag: c_uchar,
-               atoms: Rc<Atoms>)
+               tag: c_uchar)
                -> Client {
         let mut class_hint: xlib::XClassHint = unsafe { zeroed() };
         let mut client = Client {
@@ -84,7 +82,6 @@ impl Client {
             root: root,
             window: window,
             tag: tag,
-            atoms: atoms,
             title: "broken".to_string(),
             class: "broken".to_string(),
             was_floating: false,
@@ -137,10 +134,9 @@ impl ClientW {
                display: *mut xlib::Display,
                root: xlib::Window,
                window: c_ulong,
-               tag: c_uchar,
-               atoms: Rc<Atoms>)
+               tag: c_uchar)
                -> ClientW {
-        ClientW(Rc::new(RefCell::new(Client::new(config, display, root, window, tag, atoms))))
+        ClientW(Rc::new(RefCell::new(Client::new(config, display, root, window, tag))))
     }
 
     pub fn borrow(&self) -> Ref<Client> {
@@ -157,7 +153,7 @@ impl ClientW {
 
     pub fn update_title(&mut self) {
         self.borrow_mut().title =
-            util::get_text_prop(self.display(), self.window(), self.atoms().net_wm_name)
+            util::get_text_prop(self.display(), self.window(), atoms::net_wm_name())
                 .or(util::get_text_prop(self.display(), self.window(), xlib::XA_WM_NAME))
                 .unwrap_or("Unknown".to_string());
     }
@@ -187,13 +183,9 @@ impl ClientW {
         self.borrow().is_dock
     }
 
-    pub fn atoms(&self) -> Rc<Atoms> {
-        self.borrow().atoms.clone()
-    }
-
     pub fn is_dialog(&self) -> bool {
-        if let Some(atom) = self.get_atom(self.borrow().atoms.net_wm_window_type) {
-            atom == self.borrow().atoms.net_wm_window_type_dialog
+        if let Some(atom) = self.get_atom(atoms::net_wm_window_type()) {
+            atom == atoms::net_wm_window_type_dialog()
         } else {
             false
         }
@@ -260,11 +252,11 @@ impl ClientW {
             unsafe {
                 xlib::XChangeProperty(self.display(),
                                       self.window(),
-                                      self.atoms().net_wm_state,
+                                      atoms::net_wm_state(),
                                       xlib::XA_ATOM,
                                       32,
                                       xlib::PropModeReplace,
-                                      (&self.atoms().net_wm_state_fullscreen as *const u64) as *const u8,
+                                      (&atoms::net_wm_state_fullscreen() as *const u64) as *const u8,
                                       1);
             }
             self.borrow_mut().is_fullscreen = true;
@@ -275,7 +267,7 @@ impl ClientW {
             unsafe {
                 xlib::XChangeProperty(self.display(),
                                       self.window(),
-                                      self.atoms().net_wm_state,
+                                      atoms::net_wm_state(),
                                       xlib::XA_ATOM,
                                       32,
                                       xlib::PropModeReplace,
@@ -382,8 +374,8 @@ impl ClientW {
         unsafe {
             xlib::XChangeProperty(self.borrow().display,
                                   self.borrow().window,
-                                  self.borrow().atoms.wm_state,
-                                  self.borrow().atoms.wm_state,
+                                  atoms::wm_state(),
+                                  atoms::wm_state(),
                                   32,
                                   xlib::PropModeReplace,
                                   data.as_ptr() as *const u8,
@@ -406,7 +398,7 @@ impl ClientW {
                 let mut ev: xlib::XClientMessageEvent = zeroed();
                 ev.type_ = xlib::ClientMessage; // wtf?
                 ev.window = self.window();
-                ev.message_type = self.borrow().atoms.wm_protocols;
+                ev.message_type = atoms::wm_protocols();
                 ev.format = 32;
                 ev.data.set_long(0, proto as c_long);
                 ev.data.set_long(1, xlib::CurrentTime as c_long);
@@ -469,7 +461,7 @@ impl ClientW {
                                        self.borrow().focused_border_color);
                 xlib::XChangeProperty(self.display(),
                                       self.borrow().root,
-                                      self.atoms().net_active_window,
+                                      atoms::net_active_window(),
                                       xlib::XA_WINDOW,
                                       32,
                                       xlib::PropModeReplace,

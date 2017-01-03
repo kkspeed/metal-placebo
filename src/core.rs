@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use x11::xlib;
 
-use atoms::Atoms;
+use atoms;
 use client::{ClientL, ClientW, Rect};
 use config::*;
 use util;
@@ -76,7 +76,6 @@ pub struct WindowManager {
     root: c_ulong,
     screen_width: c_int,
     screen_height: c_int,
-    atoms: Rc<Atoms>,
     pub current_tag: c_uchar,
     pub special_windows: ClientL,
     colors: Colors,
@@ -92,7 +91,7 @@ impl WindowManager {
         let root = unsafe { xlib::XRootWindow(display, screen) };
         let width = unsafe { xlib::XDisplayWidth(display, screen) };
         let height = unsafe { xlib::XDisplayHeight(display, screen) };
-        let atoms = Rc::new(Atoms::create_atom(display));
+        atoms::create_atoms(display);
         let mut wm = WindowManager {
             config: config.clone(),
             display: display,
@@ -101,7 +100,6 @@ impl WindowManager {
             root: root,
             screen_width: width,
             screen_height: height,
-            atoms: atoms,
             current_tag: config.tag_default,
             special_windows: Vec::new(),
             colors: Colors::new(config.clone(), display, root),
@@ -135,27 +133,27 @@ impl WindowManager {
                                             TAG_OVERVIEW,
                                             lookup_layout(config.clone(), TAG_OVERVIEW)));
 
-        let net_atom_list = vec![wm.atoms.net_active_window,
-                                 wm.atoms.net_client_list,
-                                 wm.atoms.net_supported,
-                                 wm.atoms.net_wm_state_fullscreen,
-                                 wm.atoms.net_wm_state_above,
-                                 wm.atoms.net_wm_name,
-                                 wm.atoms.net_wm_state,
-                                 wm.atoms.net_wm_state,
-                                 wm.atoms.net_wm_window_type,
-                                 wm.atoms.net_wm_window_type_dialog,
-                                 wm.atoms.net_wm_window_type_dock];
+        let net_atom_list = vec![atoms::net_active_window(),
+                                 atoms::net_client_list(),
+                                 atoms::net_supported(),
+                                 atoms::net_wm_state_fullscreen(),
+                                 atoms::net_wm_state_above(),
+                                 atoms::net_wm_name(),
+                                 atoms::net_wm_state(),
+                                 atoms::net_wm_state(),
+                                 atoms::net_wm_window_type(),
+                                 atoms::net_wm_window_type_dialog(),
+                                 atoms::net_wm_window_type_dock()];
         unsafe {
             xlib::XChangeProperty(display,
                                   root,
-                                  wm.atoms.net_supported,
+                                  atoms::net_supported(),
                                   xlib::XA_ATOM,
                                   32,
                                   xlib::PropModeReplace,
                                   net_atom_list.as_ptr() as *mut u8,
                                   net_atom_list.len() as c_int);
-            xlib::XDeleteProperty(display, root, wm.atoms.net_client_list);
+            xlib::XDeleteProperty(display, root, atoms::net_client_list());
             let mut xattr: xlib::XSetWindowAttributes = zeroed();
             xattr.cursor = xlib::XCreateFontCursor(display, xproto::XC_LEFT_PTR);
             xattr.event_mask =
@@ -237,7 +235,7 @@ impl WindowManager {
 
     fn update_client_list(&mut self) {
         unsafe {
-            xlib::XDeleteProperty(self.display, self.root, self.atoms.net_client_list);
+            xlib::XDeleteProperty(self.display, self.root, atoms::net_client_list());
         }
 
         for (_, v) in self.workspaces.iter_mut() {
@@ -248,7 +246,7 @@ impl WindowManager {
                 unsafe {
                     xlib::XChangeProperty(self.display,
                                       self.root,
-                                      self.atoms.net_client_list,
+                                      atoms::net_client_list(),
                                       xlib::XA_WINDOW,
                                       32,
                                       xlib::PropModeAppend,
@@ -325,7 +323,7 @@ impl WindowManager {
             workspace.set_focus(client.clone());
             workspace.restack();
         }
-        client.send_event(self.atoms.wm_take_focus);
+        client.send_event(atoms::wm_take_focus());
         self.do_log();
     }
 
@@ -473,8 +471,7 @@ impl WindowManager {
                                       self.display,
                                       self.root,
                                       window,
-                                      self.current_tag,
-                                      self.atoms.clone());
+                                      self.current_tag);
         client.update_title();
         client.borrow_mut().tag = tag;
         client.borrow_mut().set_size(xa.x, xa.y, xa.width, xa.height);
@@ -485,7 +482,7 @@ impl WindowManager {
         unsafe {
             xlib::XChangeProperty(self.display,
                                   self.root,
-                                  self.atoms.net_client_list,
+                                  atoms::net_client_list(),
                                   xlib::XA_WINDOW,
                                   32,
                                   xlib::PropModeAppend,
@@ -615,59 +612,21 @@ impl WindowManager {
         }
 
         self.current_workspace_mut().restack();
-        // for i in 0..self.current_stack.len() {
-        // let mut client = self.current_stack[i].clone();
-        // if self.current_tag == TAG_OVERVIEW {
-        // client.resize(Rect {
-        // x: positions[i].0,
-        // y: positions[i].1,
-        // width: positions[i].2,
-        // height: positions[i].3,
-        // },
-        // true);
-        // } else {
-        // if client.is_maximized() {
-        // let rect = Rect::new(0,
-        // self.config.bar_height,
-        // self.screen_width - 2 * self.config.border_width,
-        // self.screen_height - self.config.bar_height -
-        // 2 * self.config.border_width);
-        // client.resize(rect, true);
-        // } else if !client.is_floating() {
-        // log!("Client title {}", client.get_title());
-        // client.resize(Rect {
-        // x: positions[i].0,
-        // y: positions[i].1,
-        // width: positions[i].2,
-        // height: positions[i].3,
-        // },
-        // false);
-        // } else {
-        // let rect = client.get_rect();
-        // client.resize(rect, false);
-        // unsafe {
-        // xlib::XSync(self.display, 0);
-        // }
-        // }
-        // }
-        // }
-        //
-        //
     }
 
     fn update_window_type(&mut self, client: ClientW) {
         log!("updating window type {}", client.get_title());
-        if let Some(state) = client.get_atom(self.atoms.net_wm_state) {
-            if state == self.atoms.net_wm_state_fullscreen {
+        if let Some(state) = client.get_atom(atoms::net_wm_state()) {
+            if state == atoms::net_wm_state_fullscreen() {
                 log!("update window type to full screen");
                 self.set_fullscreen(client.clone(), true);
             }
-            if state == self.atoms.net_wm_state_above {
+            if state == atoms::net_wm_state_above() {
                 client.clone().set_above(true);
             }
         }
-        if let Some(tp) = client.get_atom(self.atoms.net_wm_window_type) {
-            if tp == self.atoms.net_wm_window_type_dock {
+        if let Some(tp) = client.get_atom(atoms::net_wm_window_type()) {
+            if tp == atoms::net_wm_window_type_dock() {
                 log!("find a dock window");
                 let mut c = client.clone();
                 c.set_dock(true);
@@ -696,7 +655,7 @@ impl WindowManager {
              client_message.data.get_long(2));
         if let Some(title) = util::get_text_prop(self.display,
                                                  client_message.window,
-                                                 self.atoms.net_wm_name) {
+                                                 atoms::net_wm_name()) {
             log!(" window {} message name: {}, state: {}, {}, {}",
                  client_message.window,
                  title,
@@ -705,10 +664,9 @@ impl WindowManager {
                  client_message.data.get_long(2));
         }
         if let Some(c) = self.get_client_by_window(client_message.window) {
-            if client_message.message_type == self.atoms.net_wm_state {
-                if client_message.data.get_long(1) ==
-                   self.atoms.net_wm_state_fullscreen as c_long ||
-                   client_message.data.get_long(2) == self.atoms.net_wm_state_fullscreen as c_long {
+            if client_message.message_type == atoms::net_wm_state() {
+                if client_message.data.get_long(1) == atoms::net_wm_state_fullscreen() as c_long ||
+                   client_message.data.get_long(2) == atoms::net_wm_state_fullscreen() as c_long {
                     let fullscreen = client_message.data.get_long(0) == 1 ||
                                      (client_message.data.get_long(0) == 2 && !c.is_fullscreen());
                     log!("Client message: set_fullscreen: {}", fullscreen);
@@ -829,17 +787,15 @@ impl WindowManager {
 
     fn on_property_notify(&mut self, event: &xlib::XEvent) {
         let property_event = xlib::XPropertyEvent::from(*event);
-        trace!("[on_property_notify] atom: {}\n atoms: {:?}",
-               property_event.atom,
-               self.atoms);
+        trace!("[on_property_notify] atom: {}\n", property_event.atom);
         if let Some(mut c) = self.get_client_by_window(property_event.window).as_mut() {
             if property_event.atom == xlib::XA_WM_NAME ||
-               property_event.atom == self.atoms.net_wm_name {
+               property_event.atom == atoms::net_wm_name() {
                 c.update_title();
                 self.do_log();
             } else if property_event.atom == xlib::XA_WM_NORMAL_HINTS {
                 c.invalidate();
-            } else if property_event.atom == self.atoms.net_wm_window_type {
+            } else if property_event.atom == atoms::net_wm_window_type() {
                 self.update_window_type(c.clone());
             }
         }
