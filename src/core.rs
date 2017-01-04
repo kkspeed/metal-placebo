@@ -289,6 +289,12 @@ impl WindowManager {
                 self.current_workspace_mut().new_client(c.clone(), true);
             }
         }
+        unsafe {
+            xlib::XSetInputFocus(self.display,
+                                 self.root,
+                                 xlib::RevertToPointerRoot,
+                                 xlib::CurrentTime);
+        }
         self.arrange_windows();
         if let Some(c) = self.current_focused() {
             self.set_focus(c);
@@ -679,13 +685,14 @@ impl WindowManager {
     fn on_configure_request(&mut self, event: &xlib::XEvent) {
         trace!("[on_configure_request]");
         let mut xa: xlib::XWindowChanges = unsafe { zeroed() };
-        let workspace = self.workspaces.get(&self.current_tag).unwrap();
         let configure_request_event = xlib::XConfigureRequestEvent::from(*event);
-        if let Some(mut c) = workspace.get_client_by_window(configure_request_event.window) {
+        if let Some(mut c) = self.get_client_by_window(configure_request_event.window) {
             if (c.is_sticky() || c.tag() == self.current_tag) && c.is_floating() {
                 c.show(true);
             } else {
                 c.configure();
+                let show = c.tag() == self.current_tag;
+                c.show(show);
             }
         } else {
             xa.x = configure_request_event.x;
@@ -795,6 +802,8 @@ impl WindowManager {
                 self.do_log();
             } else if property_event.atom == xlib::XA_WM_NORMAL_HINTS {
                 c.invalidate();
+                let tag = c.tag();
+                c.show(tag == self.current_tag);
             } else if property_event.atom == atoms::net_wm_window_type() {
                 self.update_window_type(c.clone());
             }
