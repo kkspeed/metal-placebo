@@ -20,7 +20,7 @@ const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut core::WindowManager))] =
        keysym::XK_Print,
        &|_| spawn("scrot", &["-s", "-e", "mv $f ~/"])),
       (MOD_MASK, keysym::XK_f, &|_| spawn("pcmanfm", &[])),
-      (MOD_MASK, keysym::XK_l, &|_| spawn("i3lock", &[])),
+      (MOD_MASK, keysym::XK_l, &|_| spawn("i3lock", &["-c", "000000", "-n"])),
       (0, keysym::XF86XK_MonBrightnessUp, &|_| spawn("xbrightness", &["+10000"])),
       (0, keysym::XF86XK_MonBrightnessDown, &|_| spawn("xbrightness", &["-10000"])),
       (0, keysym::XF86XK_AudioRaiseVolume, &|_| spawn("amixer", &["set", "Master", "5000+"])),
