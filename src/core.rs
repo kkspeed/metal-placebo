@@ -21,17 +21,9 @@ use xproto;
 const TRACE: bool = true;
 
 fn lookup_layout(config: Rc<Config>, tag: c_uchar) -> Box<Layout + 'static> {
-    for &(t, l) in config.tag_layout {
-        if t == tag {
-            if l == "fullscreen" {
-                return Box::new(FullScreen);
-            }
-            if l == "tile" {
-                return Box::new(Tile);
-            }
-            if l == "overview" {
-                return Box::new(Overview);
-            }
+    for &(ref t, ref l) in &config.tag_layout {
+        if *t == tag {
+            return l.clone();
         }
     }
     Box::new(Tile)
@@ -654,7 +646,7 @@ impl WindowManager {
         trace!("[on_client_message]");
         let client_message: xlib::XClientMessageEvent = xlib::XClientMessageEvent::from(*event);
         log!("Got client message atom {}, window: {}, state: {}, {}, {}",
-             client_message.message_type,
+             atoms::get_atom(client_message.message_type),
              client_message.window,
              client_message.data.get_long(0),
              client_message.data.get_long(1),
@@ -662,7 +654,7 @@ impl WindowManager {
         if let Some(title) = util::get_text_prop(self.display,
                                                  client_message.window,
                                                  atoms::net_wm_name()) {
-            log!(" window {} message name: {}, state: {}, {}, {}",
+            log!(" window {}, title: {}, state: {}, {}, {}",
                  client_message.window,
                  title,
                  client_message.data.get_long(0),
@@ -687,7 +679,10 @@ impl WindowManager {
         let mut xa: xlib::XWindowChanges = unsafe { zeroed() };
         let configure_request_event = xlib::XConfigureRequestEvent::from(*event);
         if let Some(mut c) = self.get_client_by_window(configure_request_event.window) {
-            if (c.is_sticky() || c.tag() == self.current_tag) && c.is_floating() {
+            trace!("on_configure_request for window: {} ", c.get_title());
+            if self.current_tag == TAG_OVERVIEW {
+                c.configure();
+            } else if (c.is_sticky() || c.tag() == self.current_tag) && c.is_floating() {
                 c.show(true);
             } else {
                 c.configure();
@@ -794,8 +789,10 @@ impl WindowManager {
 
     fn on_property_notify(&mut self, event: &xlib::XEvent) {
         let property_event = xlib::XPropertyEvent::from(*event);
-        trace!("[on_property_notify] atom: {}\n", property_event.atom);
         if let Some(mut c) = self.get_client_by_window(property_event.window).as_mut() {
+            trace!("[on_property_notify] atom: {}, window: {}",
+                   atoms::get_atom(property_event.atom),
+                   c.get_title());
             if property_event.atom == xlib::XA_WM_NAME ||
                property_event.atom == atoms::net_wm_name() {
                 c.update_title();

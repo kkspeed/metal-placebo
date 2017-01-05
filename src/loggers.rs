@@ -150,7 +150,12 @@ impl Logger for XMobarLogger {
                 }
                 _ => self.config.client_color,
             };
-            result += &format!("[<fc={}>{1:.5}</fc>] ", color, c.get_title());
+            let msg = if current_tag == 0 {
+                format!("{}@", c.tag() as char)
+            } else {
+                "".to_string()
+            };
+            result += &format!("[<fc={}>{1:.8}</fc>] ", color, msg + &c.get_title());
         }
         writeln!(self.child_stdin, "{}", result).unwrap();
     }

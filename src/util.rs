@@ -46,7 +46,7 @@ macro_rules! define_tags (
         (&[
             $(($modkey, $x as c_uint, &|w| w.select_tag($x as c_uchar)), )*
             $(($modkey | $mod_mask, $x as c_uint, &|w| w.add_tag($x as c_uchar)),)*
-        ], &[$($x as c_uchar, )*]) 
+        ], &[$($x as c_uchar, )*])
     };
 );
 

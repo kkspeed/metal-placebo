@@ -96,6 +96,44 @@ pub fn create_atoms(display: *mut xlib::Display) {
     }
 }
 
+pub fn get_atom(atom: xlib::Atom) -> String {
+    unsafe {
+        if atom == WM_PROTOCOLS {
+            "WM_PROTOCOLS".to_string()
+        } else if atom == WM_DELETE {
+            "WM_DELETE_WINDOW".to_string()
+        } else if atom == WM_STATE {
+            "WM_STATE".to_string()
+        } else if atom == WM_TAKE_FOCUS {
+            "WM_TAKE_FOCUS".to_string()
+        } else if atom == NET_ACTIVE_WINDOW {
+            "_NET_ACTIVE_WINDOW".to_string()
+        } else if atom == NET_SUPPORTED {
+            "_NET_SUPPORTED".to_string()
+        } else if atom == NET_WM_NAME {
+            "_NET_SUPPORTED".to_string()
+        } else if atom == NET_WM_STATE {
+            "_NET_WM_STATE".to_string()
+        } else if atom == NET_WM_STATE_ABOVE {
+            "_NET_WM_STATE_ABOVE".to_string()
+        } else if atom == NET_WM_STATE_STICKY {
+            "_NET_WM_STATE_STICKY".to_string()
+        } else if atom == NET_WM_STATE_FULLSCREEN {
+            "_NET_WM_STATE_FULLSCREEN".to_string()
+        } else if atom == NET_WM_WINDOW_TYPE {
+            "_NET_WM_WINDOW_TYPE".to_string()
+        } else if atom == NET_WM_WINDOW_TYPE_DIALOG {
+            "_NET_WM_WINDOW_TYPE_DIALOG".to_string()
+        } else if atom == NET_WM_WINDOW_TYPE_DOCK {
+            "_NET_WM_WINDOW_TYPE_DOCK".to_string()
+        } else if atom == NET_CLIENT_LIST {
+            "_NET_CLIENT_LIST".to_string()
+        } else {
+            format!("Unknown atom: {}", atom)
+        }
+    }
+}
+
 fn intern_atom(display: *mut xlib::Display, atom: &str) -> xlib::Atom {
     unsafe { xlib::XInternAtom(display, CString::new(atom).unwrap().as_ptr(), 0) }
 }

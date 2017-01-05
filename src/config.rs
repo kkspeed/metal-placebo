@@ -69,7 +69,7 @@ pub struct Config {
     pub tag_default: c_uchar,
     pub tag_description: &'static [(c_uchar, &'static str)],
     pub tag_keys: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))],
-    pub tag_layout: &'static [(c_uchar, &'static str)],
+    pub tag_layout: Vec<(c_uchar, Box<Layout + 'static>)>,
     pub window_expand_delta: c_int,
     pub window_move_delta: c_int,
 }
@@ -150,7 +150,7 @@ impl Config {
         self
     }
 
-    pub fn tag_layout(mut self, layout: &'static [(c_uchar, &'static str)]) -> Config {
+    pub fn tag_layout(mut self, layout: Vec<(c_uchar, Box<Layout + 'static>)>) -> Config {
         self.tag_layout = layout;
         self
     }
@@ -191,7 +191,7 @@ impl Default for Config {
             tag_default: TAG_KEYS.1[0],
             tag_description: &[],
             tag_keys: TAG_KEYS.0,
-            tag_layout: &[],
+            tag_layout: Vec::new(),
             window_expand_delta: WINDOW_EXPAND_DELTA,
             window_move_delta: WINDOW_MOVE_DELTA,
         }

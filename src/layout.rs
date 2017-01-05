@@ -6,11 +6,30 @@ use config::Config;
 use core;
 use workspace::Workspace;
 
-pub trait Layout {
+pub trait Layout: LayoutClone {
     fn layout(&self, current_workspace: &Workspace, rect: Rect) -> Vec<(ClientW, Rect)>;
     fn post(&self, message: &str, window_manager: &mut core::WindowManager) {}
 }
 
+pub trait LayoutClone {
+    fn clone_layout(&self) -> Box<Layout>;
+}
+
+impl<T> LayoutClone for T
+    where T: 'static + Layout + Clone
+{
+    fn clone_layout(&self) -> Box<Layout> {
+        Box::new(self.clone())
+    }
+}
+
+impl Clone for Box<Layout> {
+    fn clone(&self) -> Box<Layout> {
+        self.clone_layout()
+    }
+}
+
+#[derive(Clone)]
 pub struct Tile;
 
 impl Layout for Tile {
@@ -62,6 +81,7 @@ impl Layout for Tile {
     }
 }
 
+#[derive(Clone)]
 pub struct FullScreen;
 
 impl Layout for FullScreen {
@@ -71,11 +91,12 @@ impl Layout for FullScreen {
     }
 }
 
+#[derive(Clone)]
 pub struct Overview;
 
 impl Layout for Overview {
     fn layout(&self, current_workspace: &Workspace, rect: Rect) -> Vec<(ClientW, Rect)> {
-        let clients = current_workspace.select_clients(&|_| true);
+        let clients = current_workspace.select_clients(&|c| !c.is_sticky());
         let mut result = Vec::new();
         let rects = overview_rects(current_workspace.config.clone(), clients.len(), rect);
         for i in 0..clients.len() {
