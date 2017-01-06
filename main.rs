@@ -51,7 +51,8 @@ const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut core::WindowManager))] =
     })];
 
 const START_PROGRAMS: &'static [&'static Fn()] =
-    &[&|| spawn("xcompmgr", &[]),
+    &[&|| spawn("wmname", &["LG3D"]),
+      &|| spawn("xcompmgr", &[]),
       &|| spawn("fcitx", &[]),
       &|| spawn("tilda", &["--hidden"]),
       &|| spawn("/usr/lib/polkit-kde/polkit-kde-authentication-agent-1", &[])];
