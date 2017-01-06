@@ -129,6 +129,7 @@ impl WindowManager {
                                  atoms::net_client_list(),
                                  atoms::net_supported(),
                                  atoms::net_wm_state_fullscreen(),
+                                 atoms::net_wm_state_modal(),
                                  atoms::net_wm_state_above(),
                                  atoms::net_wm_name(),
                                  atoms::net_wm_state(),
@@ -622,6 +623,9 @@ impl WindowManager {
             if state == atoms::net_wm_state_above() {
                 client.clone().set_above(true);
             }
+            if state == atoms::net_wm_state_modal() {
+                client.clone().set_floating(true);
+            }
         }
         if let Some(tp) = client.get_atom(atoms::net_wm_window_type()) {
             if tp == atoms::net_wm_window_type_dock() {
@@ -669,6 +673,11 @@ impl WindowManager {
                                      (client_message.data.get_long(0) == 2 && !c.is_fullscreen());
                     log!("Client message: set_fullscreen: {}", fullscreen);
                     self.set_fullscreen(c.clone(), fullscreen);
+                }
+                if client_message.data.get_long(1) == atoms::net_wm_state_modal() as c_long ||
+                   client_message.data.get_long(2) == atoms::net_wm_state_modal() as c_long {
+                    c.clone().set_floating(true);
+                    self.arrange_windows();
                 }
             }
         }

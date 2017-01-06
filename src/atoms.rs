@@ -56,6 +56,11 @@ pub fn net_wm_state_sticky() -> xlib::Atom {
     unsafe { NET_WM_STATE_STICKY }
 }
 
+static mut NET_WM_STATE_MODAL: xlib::Atom = 0;
+pub fn net_wm_state_modal() -> xlib::Atom {
+    unsafe { NET_WM_STATE_MODAL }
+}
+
 static mut NET_WM_WINDOW_TYPE: xlib::Atom = 0;
 pub fn net_wm_window_type() -> xlib::Atom {
     unsafe { NET_WM_WINDOW_TYPE }
@@ -89,6 +94,7 @@ pub fn create_atoms(display: *mut xlib::Display) {
         NET_WM_STATE_ABOVE = intern_atom(display, "_NET_WM_STATE_ABOVE");
         NET_WM_STATE_STICKY = intern_atom(display, "_NET_WM_STATE_STICKY");
         NET_WM_STATE_FULLSCREEN = intern_atom(display, "_NET_WM_STATE_FULLSCREEN");
+        NET_WM_STATE_MODAL = intern_atom(display, "_NET_WM_STATE_MODAL");
         NET_WM_WINDOW_TYPE = intern_atom(display, "_NET_WM_WINDOW_TYPE");
         NET_WM_WINDOW_TYPE_DIALOG = intern_atom(display, "_NET_WM_WINDOW_TYPE_DIALOG");
         NET_WM_WINDOW_TYPE_DOCK = intern_atom(display, "_NET_WM_WINDOW_TYPE_DOCK");
@@ -120,6 +126,8 @@ pub fn get_atom(atom: xlib::Atom) -> String {
             "_NET_WM_STATE_STICKY".to_string()
         } else if atom == NET_WM_STATE_FULLSCREEN {
             "_NET_WM_STATE_FULLSCREEN".to_string()
+        } else if atom == NET_WM_STATE_MODAL {
+            "_NET_WM_STATE_MODAL".to_string()
         } else if atom == NET_WM_WINDOW_TYPE {
             "_NET_WM_WINDOW_TYPE".to_string()
         } else if atom == NET_WM_WINDOW_TYPE_DIALOG {
