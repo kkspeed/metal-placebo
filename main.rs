@@ -2,7 +2,10 @@
 extern crate rswm;
 extern crate x11;
 
+use std::io;
+use std::io::{Read, Write};
 use std::os::raw::{c_uchar, c_uint};
+use std::process;
 use x11::{keysym, xlib};
 
 use rswm::client::ClientW;
@@ -26,7 +29,26 @@ const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut core::WindowManager))] =
       (0, keysym::XF86XK_AudioRaiseVolume, &|_| spawn("amixer", &["set", "Master", "5000+"])),
       (0, keysym::XF86XK_AudioLowerVolume, &|_| spawn("amixer", &["set", "Master", "5000-"])),
       (0, keysym::XF86XK_AudioMute, &|_| spawn("amixer", &["set", "Master", "toggle"])),
-      (0, keysym::XF86XK_AudioMicMute, &|_| spawn("amixer", &["set", "Capture", "toggle"]))];
+      (0, keysym::XF86XK_AudioMicMute, &|_| spawn("amixer", &["set", "Capture", "toggle"])),
+      (MOD_MASK,
+       keysym::XK_w,
+       &|w| {
+        let clients = w.all_clients();
+        let contents: Vec<String> =
+            clients.iter().map(|c| format!("[{}] {}", c.get_class(), c.get_title())).collect();
+        match dmenu_helper(contents.iter(),
+                           &["-p", "window", "-i", "-l", "7", "-sb", "#000000", "-sf",
+                             "#00ff00", "-nb", "#000000", "-nf", "#dddddd"]) {
+            Ok(result) => {
+                if let Some(position) = contents.iter().position(|s| (*s).trim() == result.trim()) {
+                    let c = clients[position].clone();
+                    w.select_tag(c.tag());
+                    w.set_focus(c);
+                }
+            }
+            Err(_) => return,
+        }
+    })];
 
 const START_PROGRAMS: &'static [&'static Fn()] =
     &[&|| spawn("xcompmgr", &[]),
@@ -71,4 +93,21 @@ fn main() {
     let mut window_manager = core::WindowManager::new(config);
     window_manager.set_logger(Box::new(xmobar_logger));
     window_manager.run();
+}
+
+fn dmenu_helper<'a, I>(strings: I, args: &[&str]) -> Result<String, io::Error>
+    where I: Iterator<Item = &'a String>
+{
+    let mut child = try!(process::Command::new("dmenu")
+        .args(args)
+        .stdin(process::Stdio::piped())
+        .stdout(process::Stdio::piped())
+        .spawn());
+    for c in strings {
+        try!(writeln!(child.stdin.as_mut().unwrap(), "{}", c));
+    }
+    try!(child.wait());
+    let mut result = String::new();
+    try!(child.stdout.unwrap().read_to_string(&mut result));
+    Ok(result)
 }
