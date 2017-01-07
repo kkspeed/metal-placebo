@@ -1,5 +1,6 @@
 use std::ffi::CString;
-use std::io::Write;
+use std::io;
+use std::io::{Read, Write};
 use std::os::raw::{c_char, c_int};
 use std::mem::zeroed;
 use std::process;
@@ -109,6 +110,23 @@ pub fn spawn(command: &str, args: &[&str]) {
         Ok(_) => (),
         Err(s) => log!("Fail to spawn process {}, error: {}", command, s),
     }
+}
+
+pub fn dmenu_helper<'a, I>(strings: I, args: &[&str]) -> Result<String, io::Error>
+    where I: Iterator<Item = &'a String>
+{
+    let mut child = try!(process::Command::new("dmenu")
+        .args(args)
+        .stdin(process::Stdio::piped())
+        .stdout(process::Stdio::piped())
+        .spawn());
+    for c in strings {
+        try!(writeln!(child.stdin.as_mut().unwrap(), "{}", c));
+    }
+    try!(child.wait());
+    let mut result = String::new();
+    try!(child.stdout.unwrap().read_to_string(&mut result));
+    Ok(result)
 }
 
 #[allow(unused_variables)]

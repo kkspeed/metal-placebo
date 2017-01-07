@@ -2,10 +2,8 @@
 extern crate rswm;
 extern crate x11;
 
-use std::io;
-use std::io::{Read, Write};
+use std::rc::Rc;
 use std::os::raw::{c_uchar, c_uint};
-use std::process;
 use x11::{keysym, xlib};
 
 use rswm::client::ClientW;
@@ -13,7 +11,7 @@ use rswm::config::*;
 use rswm::core;
 use rswm::loggers;
 use rswm::layout::{Tile, FullScreen, Overview, Layout};
-use rswm::util::spawn;
+use rswm::util::{spawn, dmenu_helper};
 
 const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut core::WindowManager))] =
     &[(MOD_MASK, keysym::XK_r, &|_| spawn("dmenu_run", &[])),
@@ -106,21 +104,4 @@ fn main() {
     let mut window_manager = core::WindowManager::new(config);
     window_manager.set_logger(Box::new(xmobar_logger));
     window_manager.run();
-}
-
-fn dmenu_helper<'a, I>(strings: I, args: &[&str]) -> Result<String, io::Error>
-    where I: Iterator<Item = &'a String>
-{
-    let mut child = try!(process::Command::new("dmenu")
-        .args(args)
-        .stdin(process::Stdio::piped())
-        .stdout(process::Stdio::piped())
-        .spawn());
-    for c in strings {
-        try!(writeln!(child.stdin.as_mut().unwrap(), "{}", c));
-    }
-    try!(child.wait());
-    let mut result = String::new();
-    try!(child.stdout.unwrap().read_to_string(&mut result));
-    Ok(result)
 }
