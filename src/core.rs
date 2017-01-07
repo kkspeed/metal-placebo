@@ -737,8 +737,10 @@ impl WindowManager {
     fn on_focus_in(&mut self, event: &xlib::XEvent) {
         trace!("[on_focus_in]");
         if let Some(client) = self.current_focused() {
+            if !client.is_floating() {
+                self.current_workspace_mut().restack();
+            }
             self.current_workspace_mut().set_focus(client);
-            self.current_workspace_mut().restack();
         }
     }
 
