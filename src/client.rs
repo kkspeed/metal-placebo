@@ -1,4 +1,5 @@
 use std::cell::{Ref, RefCell, RefMut};
+use std::collections::HashMap;
 use std::ffi::CString;
 use std::io::Write;
 use std::os::raw::{c_long, c_int, c_uchar, c_uint, c_ulong, c_void};
@@ -66,6 +67,7 @@ pub struct Client {
     pub border: c_int,
     pub old_border: c_int,
     pub weight: i32,
+    extras: HashMap<String, Rc<String>>,
 }
 
 impl Client {
@@ -99,6 +101,7 @@ impl Client {
             border: 0,
             old_border: 0,
             weight: -1,
+            extras: HashMap::new(),
         };
         unsafe {
             xlib::XGetClassHint(display, window, &mut class_hint);
@@ -193,6 +196,14 @@ impl ClientW {
 
     pub fn is_maximized(&self) -> bool {
         self.borrow().is_maximized
+    }
+
+    pub fn get_extra(&self, key: &str) -> Option<Rc<String>> {
+        self.borrow().extras.get(key).map(|c| c.clone())
+    }
+
+    pub fn put_extra(&mut self, key: String, val: String) {
+        self.borrow_mut().extras.insert(key, Rc::new(val));
     }
 
     pub fn get_atom(&self, atom: xlib::Atom) -> Option<xlib::Atom> {
