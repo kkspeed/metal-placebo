@@ -37,8 +37,21 @@ const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut core::WindowManager))] =
         let contents: Vec<String> =
             clients.iter().map(|c| format!("[{}] {}", c.get_class(), c.get_title())).collect();
         match dmenu_helper(contents.iter(),
-                           &["-p", "window", "-i", "-l", "7", "-sb", "#000000", "-sf",
-                             "#00ff00", "-nb", "#000000", "-nf", "#dddddd"]) {
+                           &["-p",
+                             "window",
+                             "-i",
+                             "-l",
+                             "7",
+                             "-sb",
+                             "#000000",
+                             "-sf",
+                             "#00ff00",
+                             "-nb",
+                             "#000000",
+                             "-nf",
+                             "#dddddd",
+                             "-fn",
+                             "WenQuanYi Micro Hei Mono-12"]) {
             Ok(result) => {
                 if let Some(position) = contents.iter().position(|s| (*s).trim() == result.trim()) {
                     let c = clients[position].clone();
@@ -51,8 +64,7 @@ const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut core::WindowManager))] =
     })];
 
 const START_PROGRAMS: &'static [&'static Fn()] =
-    &[&|| spawn("wmname", &["LG3D"]),
-      &|| spawn("xcompmgr", &[]),
+    &[&|| spawn("xcompmgr", &[]),
       &|| spawn("fcitx", &[]),
       &|| spawn("tilda", &["--hidden"]),
       &|| spawn("/usr/lib/polkit-kde/polkit-kde-authentication-agent-1", &[])];
