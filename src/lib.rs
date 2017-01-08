@@ -10,6 +10,8 @@ pub mod loggers;
 pub mod layout;
 pub mod workspace;
 mod atoms;
+pub mod prompt;
+pub mod extra;
 
 #[allow(dead_code, non_upper_case_globals)]
 mod xproto;

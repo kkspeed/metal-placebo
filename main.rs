@@ -9,9 +9,10 @@ use x11::{keysym, xlib};
 use rswm::client::ClientW;
 use rswm::config::*;
 use rswm::core;
+use rswm::extra;
 use rswm::loggers;
-use rswm::layout::{Tile, FullScreen, Overview, Layout};
-use rswm::util::{spawn, dmenu_helper};
+use rswm::layout::{Tile, Tile13, FullScreen, Overview, Layout};
+use rswm::util::spawn;
 
 const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut core::WindowManager))] =
     &[(MOD_MASK, keysym::XK_r, &|_| spawn("dmenu_run", &[])),
@@ -28,66 +29,15 @@ const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut core::WindowManager))] =
       (0, keysym::XF86XK_AudioLowerVolume, &|_| spawn("amixer", &["set", "Master", "5000-"])),
       (0, keysym::XF86XK_AudioMute, &|_| spawn("amixer", &["set", "Master", "toggle"])),
       (0, keysym::XF86XK_AudioMicMute, &|_| spawn("amixer", &["set", "Capture", "toggle"])),
-      (MOD_MASK | xlib::ShiftMask,
-       keysym::XK_w,
-       &|w| {
-        if let Some(c) = w.current_focused() {
-            match dmenu_helper(Vec::new().iter(),
-                               &["-p", &format!("add user tag to {}:", c.get_class())]) {
-                Ok(result) if !result.trim().is_empty() => {
-                    c.clone().put_extra("user_tag".to_string(), result.trim().to_string())
-                }
-                _ => return,
-            }
-        }
-    }),
-      (MOD_MASK,
-       keysym::XK_w,
-       &|w| {
-        let clients = w.all_clients();
-        let contents: Vec<String> = clients.iter()
-            .map(|c| {
-                format!("[({}) {}] {}",
-                        c.get_extra("user_tag").unwrap_or(Rc::new("".to_string())),
-                        c.get_class(),
-                        c.get_title())
-            })
-            .collect();
-        match dmenu_helper(contents.iter(),
-                           &["-p",
-                             "window",
-                             "-i",
-                             "-l",
-                             "7",
-                             "-sb",
-                             "#000000",
-                             "-sf",
-                             "#00ff00",
-                             "-nb",
-                             "#000000",
-                             "-nf",
-                             "#dddddd",
-                             "-fn",
-                             "WenQuanYi Micro Hei Mono-12"]) {
-            Ok(result) => {
-                if let Some(position) = contents.iter().position(|s| (*s).trim() == result.trim()) {
-                    let c = clients[position].clone();
-                    w.select_tag(c.tag());
-                    w.set_focus(c);
-                }
-            }
-            Err(_) => return,
-        }
-    })];
+      (MOD_MASK | xlib::ShiftMask, keysym::XK_t, &extra::add_workspace_user_tag_dmenu),
+      (MOD_MASK | xlib::ShiftMask, keysym::XK_w, &extra::add_window_user_tag_dmenu),
+      (MOD_MASK, keysym::XK_w, &extra::select_window_dmenu)];
 
 const START_PROGRAMS: &'static [&'static Fn()] =
     &[&|| spawn("xcompmgr", &[]),
       &|| spawn("fcitx", &[]),
       &|| spawn("tilda", &["--hidden"]),
       &|| spawn("/usr/lib/polkit-kde/polkit-kde-authentication-agent-1", &[])];
-
-const TAG_LAYOUT: &'static [(c_uchar, &'static str)] = &[('9' as c_uchar, "fullscreen"),
-                                                         (TAG_OVERVIEW as c_uchar, "overview")];
 
 const RULES: &'static [(&'static Fn(&ClientW) -> bool, &'static Fn(&mut ClientW))] =
     &[(&|c| c.get_class() == "Gimp", &|c| c.set_floating(true)),

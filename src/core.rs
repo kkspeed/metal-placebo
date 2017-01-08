@@ -115,6 +115,7 @@ impl WindowManager {
             let w = Workspace::new(config.clone(),
                                    wm.anchor_window,
                                    *tag,
+                                   config.get_description(*tag).map(|c| c.into()),
                                    lookup_layout(config.clone(), *tag));
             wm.workspaces.insert(*tag, w);
         }
@@ -123,6 +124,7 @@ impl WindowManager {
                              Workspace::new(config.clone(),
                                             wm.anchor_window,
                                             TAG_OVERVIEW,
+                                            None,
                                             lookup_layout(config.clone(), TAG_OVERVIEW)));
 
         let net_atom_list = vec![atoms::net_active_window(),
@@ -184,46 +186,29 @@ impl WindowManager {
     }
 
     fn grab_keys(&mut self) {
-        unsafe {
+        let grab = |keys: &[(c_uint, c_uint, &Fn(&mut WindowManager))]| {
             let modifiers = vec![0, xlib::LockMask];
+            for &key in keys {
+                unsafe {
+                    let code = xlib::XKeysymToKeycode(self.display, key.1 as u64);
+                    for modifier in modifiers.iter() {
+                        xlib::XGrabKey(self.display,
+                                       code as i32,
+                                       key.0 | modifier,
+                                       self.root,
+                                       1,
+                                       xlib::GrabModeAsync,
+                                       xlib::GrabModeAsync);
+                    }
+                }
+            }
+        };
+        unsafe {
             xlib::XUngrabKey(self.display, xlib::AnyKey, xlib::AnyModifier, self.root);
-            for &key in self.config.keys {
-                let code = xlib::XKeysymToKeycode(self.display, key.1 as u64);
-                for modifier in modifiers.iter() {
-                    xlib::XGrabKey(self.display,
-                                   code as i32,
-                                   key.0 | modifier,
-                                   self.root,
-                                   1,
-                                   xlib::GrabModeAsync,
-                                   xlib::GrabModeAsync);
-                }
-            }
-            for &key in self.config.tag_keys {
-                let code = xlib::XKeysymToKeycode(self.display, key.1 as u64);
-                for modifier in modifiers.iter() {
-                    xlib::XGrabKey(self.display,
-                                   code as i32,
-                                   key.0 | modifier,
-                                   self.root,
-                                   1,
-                                   xlib::GrabModeAsync,
-                                   xlib::GrabModeAsync);
-                }
-            }
-            for &key in self.config.add_keys {
-                let code = xlib::XKeysymToKeycode(self.display, key.1 as u64);
-                for modifier in modifiers.iter() {
-                    xlib::XGrabKey(self.display,
-                                   code as i32,
-                                   key.0 | modifier,
-                                   self.root,
-                                   1,
-                                   xlib::GrabModeAsync,
-                                   xlib::GrabModeAsync);
-                }
-            }
         }
+        grab(self.config.keys);
+        grab(self.config.tag_keys);
+        grab(self.config.add_keys);
     }
 
     fn update_client_list(&mut self) {
@@ -545,6 +530,7 @@ impl WindowManager {
         let current_clients = self.current_clients();
         let current_focused = self.current_focused();
         self.logger.dump(&self.config,
+                         &self.workspaces,
                          &all_clients,
                          self.current_tag,
                          &current_clients,

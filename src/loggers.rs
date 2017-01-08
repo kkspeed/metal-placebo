@@ -1,10 +1,11 @@
+use std::collections::HashMap;
 use std::io::Write;
 use std::os::raw::c_uchar;
 use std::process;
 
 use client::ClientW;
 use config::Config;
-use core::WindowManager;
+use workspace::Workspace;
 
 pub struct LoggerConfig {
     pub client_color: &'static str,
@@ -56,6 +57,7 @@ impl Default for LoggerConfig {
 pub trait Logger {
     fn dump(&mut self,
             global_config: &Config,
+            workspaces: &HashMap<c_uchar, Workspace>,
             clients: &Vec<ClientW>,
             current_tag: c_uchar,
             current_clients: &Vec<ClientW>,
@@ -75,6 +77,7 @@ impl Logger for DummyLogger {
     #[allow(unused_variables)]
     fn dump(&mut self,
             global_config: &Config,
+            workspaces: &HashMap<c_uchar, Workspace>,
             clients: &Vec<ClientW>,
             current_tag: c_uchar,
             current_clients: &Vec<ClientW>,
@@ -105,6 +108,7 @@ impl XMobarLogger {
 impl Logger for XMobarLogger {
     fn dump(&mut self,
             global_config: &Config,
+            workspaces: &HashMap<c_uchar, Workspace>,
             clients: &Vec<ClientW>,
             current_tag: c_uchar,
             current_clients: &Vec<ClientW>,
@@ -120,7 +124,7 @@ impl Logger for XMobarLogger {
                     result += &format!("<fc={}> Overview </fc>|", self.config.tag_selected_color);
                 } else {
                     result += &if let Some(description) =
-                        global_config.get_description(*t as c_uchar) {
+                        workspaces.get(&(*t as c_uchar)).unwrap().get_description() {
                         format!("<fc={}> {} - {} </fc>|",
                                 self.config.tag_selected_color,
                                 t,
@@ -131,7 +135,7 @@ impl Logger for XMobarLogger {
                 }
             } else {
                 result += &if let Some(description) =
-                    global_config.get_description(*t as c_uchar) {
+                    workspaces.get(&(*t as c_uchar)).unwrap().get_description() {
                     format!("<fc={}> {} - {} </fc>|",
                             self.config.tag_color,
                             t,

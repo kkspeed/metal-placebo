@@ -23,6 +23,7 @@ pub struct Workspace {
     client_current: Option<ClientW>,
     clients_prev: VecDeque<ClientW>,
     clients_next: VecDeque<ClientW>,
+    description: Option<String>,
     layout: Box<Layout + 'static>,
     pub tag: c_uchar,
 }
@@ -31,6 +32,7 @@ impl Workspace {
     pub fn new(config: Rc<Config>,
                anchor_window: xlib::Window,
                tag: c_uchar,
+               description: Option<String>,
                layout: Box<Layout + 'static>)
                -> Self {
         Workspace {
@@ -38,6 +40,7 @@ impl Workspace {
             client_current: None,
             clients_prev: VecDeque::new(),
             clients_next: VecDeque::new(),
+            description: description,
             config: config,
             layout: layout,
             tag: tag,
@@ -107,6 +110,10 @@ impl Workspace {
 
     pub fn get_current_focused(&self) -> Option<ClientW> {
         self.client_current.as_ref().map(|c| c.clone())
+    }
+
+    pub fn get_description(&self) -> Option<&String> {
+        self.description.as_ref()
     }
 
     pub fn get_layout(&self, rect: Rect) -> Vec<(ClientW, Rect)> {
@@ -192,6 +199,10 @@ impl Workspace {
                                             &mut xevent) != 0 {}
             }
         }
+    }
+
+    pub fn set_description<T: Into<String>>(&mut self, description: T) {
+        self.description = Some(description.into());
     }
 
     pub fn set_focus(&mut self, client: ClientW) {

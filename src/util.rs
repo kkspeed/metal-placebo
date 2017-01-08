@@ -112,23 +112,6 @@ pub fn spawn(command: &str, args: &[&str]) {
     }
 }
 
-pub fn dmenu_helper<'a, I>(strings: I, args: &[&str]) -> Result<String, io::Error>
-    where I: Iterator<Item = &'a String>
-{
-    let mut child = try!(process::Command::new("dmenu")
-        .args(args)
-        .stdin(process::Stdio::piped())
-        .stdout(process::Stdio::piped())
-        .spawn());
-    for c in strings {
-        try!(writeln!(child.stdin.as_mut().unwrap(), "{}", c));
-    }
-    try!(child.wait());
-    let mut result = String::new();
-    try!(child.stdout.unwrap().read_to_string(&mut result));
-    Ok(result)
-}
-
 #[allow(unused_variables)]
 pub extern "C" fn xerror(dpy: *mut xlib::Display, err: *mut xlib::XErrorEvent) -> c_int {
     let ee = unsafe { *err };
