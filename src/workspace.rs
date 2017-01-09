@@ -184,10 +184,12 @@ impl Workspace {
             }
 
             let mut to_restack = vec![self.anchor_window, focus.window()];
-            to_restack.extend(
-                self.select_clients(&|c| {
-                        c.window() != focus.window() && !c.is_floating()
-                    }).iter().map(|c| c.window()));
+            to_restack.extend(self.select_clients(&|c| {
+                    c.window() != focus.window() && !c.is_floating() &&
+                    c.get_rect().intersect(&focus.get_rect())
+                })
+                .iter()
+                .map(|c| c.window()));
             unsafe {
                 xlib::XRestackWindows(focus.display(),
                                       to_restack.as_mut_ptr(),

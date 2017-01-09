@@ -727,6 +727,7 @@ impl WindowManager {
                 self.current_workspace_mut().restack();
             }
             self.current_workspace_mut().set_focus(client);
+            self.do_log();
         }
     }
 

@@ -42,6 +42,21 @@ impl Rect {
             height: height,
         }
     }
+
+    pub fn intersect(&self, other: &Rect) -> bool {
+        self.contains_point(other.x, other.y) ||
+        self.contains_point(other.x + other.width, other.y) ||
+        self.contains_point(other.x, other.y + other.height) ||
+        self.contains_point(other.x + other.width, other.y + other.height) ||
+        other.contains_point(self.x, self.y) ||
+        other.contains_point(self.x + self.width, self.y) ||
+        other.contains_point(self.x, self.y + self.height) ||
+        other.contains_point(self.x + self.width, self.y + self.height)
+    }
+
+    pub fn contains_point(&self, x: c_int, y: c_int) -> bool {
+        x >= self.x && x <= self.x + self.width && y >= self.y && y <= self.y + self.height
+    }
 }
 
 pub struct Client {
