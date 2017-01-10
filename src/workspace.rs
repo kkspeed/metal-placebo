@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::io::Write;
 use std::mem::zeroed;
-use std::os::raw::{c_int, c_uchar};
+use std::os::raw::{c_int, c_uchar, c_uint};
 use std::rc::Rc;
 
 use atoms;
@@ -183,17 +183,14 @@ impl Workspace {
                 return;
             }
 
-            let mut to_restack = vec![self.anchor_window, focus.window()];
-            to_restack.extend(self.select_clients(&|c| {
-                    c.window() != focus.window() && !c.is_floating() &&
-                    c.get_rect().intersect(&focus.get_rect())
-                })
-                .iter()
-                .map(|c| c.window()));
             unsafe {
-                xlib::XRestackWindows(focus.display(),
-                                      to_restack.as_mut_ptr(),
-                                      to_restack.len() as c_int);
+                let mut wc: xlib::XWindowChanges = zeroed();
+                wc.stack_mode = xlib::Below;
+                wc.sibling = self.anchor_window;
+                xlib::XConfigureWindow(focus.display(),
+                                       focus.window(),
+                                       xlib::CWSibling as c_uint | xlib::CWStackMode as c_uint,
+                                       &mut wc);
                 let mut xevent: xlib::XEvent = zeroed();
                 xlib::XSync(focus.display(), 0);
                 while xlib::XCheckMaskEvent(focus.display(),

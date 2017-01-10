@@ -488,7 +488,10 @@ impl WindowManager {
             wc.border_width = self.config.border_width;
             self.update_window_type(client.clone());
             if !(client.is_dock()) {
-                xlib::XConfigureWindow(self.display, window, xlib::CWBorderWidth as u32, &mut wc);
+                xlib::XConfigureWindow(self.display,
+                                       window,
+                                       xlib::CWBorderWidth as c_uint,
+                                       &mut wc);
                 xlib::XSetWindowBorder(self.display, window, self.colors.normal_border_color);
             }
             xlib::XSelectInput(self.display,
