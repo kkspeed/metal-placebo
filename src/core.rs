@@ -693,11 +693,21 @@ impl WindowManager {
     fn on_configure_request(&mut self, event: &xlib::XEvent) {
         trace!("[on_configure_request]");
         let mut xa: xlib::XWindowChanges = unsafe { zeroed() };
-        let configure_request_event = xlib::XConfigureRequestEvent::from(*event);
+        let mut configure_request_event = xlib::XConfigureRequestEvent::from(*event);
         if let Some(mut c) = self.get_client_by_window(configure_request_event.window) {
             trace!("on_configure_request for window: {} ", c.get_title());
             if self.current_tag == TAG_OVERVIEW {
-                c.configure();
+                xa.sibling = configure_request_event.above;
+                xa.stack_mode = configure_request_event.detail;
+                configure_request_event.value_mask &=
+                    !((xlib::CWX | xlib::CWY | xlib::CWWidth | xlib::CWHeight) as c_ulong);
+                unsafe {
+                    xlib::XConfigureWindow(self.display,
+                                           configure_request_event.window,
+                                           configure_request_event.value_mask as c_uint,
+                                           &mut xa);
+                }
+                // c.configure();
                 // TODO: steam seems to go this path a lot of times... how to handle it
                 // in overview mode?
                 // self.arrange_windows();
@@ -820,8 +830,8 @@ impl WindowManager {
                 c.update_title();
                 self.do_log();
             } else if property_event.atom == xlib::XA_WM_NORMAL_HINTS {
-                let tag = c.tag();
-                if tag != TAG_OVERVIEW {
+                if self.current_tag != TAG_OVERVIEW {
+                    let tag = c.tag();
                     // ignore size hint for overview since the window sizes are
                     // temporary.
                     c.invalidate();
