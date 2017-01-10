@@ -467,6 +467,7 @@ impl WindowManager {
                                       self.display,
                                       self.root,
                                       window,
+                                      self.anchor_window,
                                       self.current_tag);
         client.update_title();
         client.borrow_mut().tag = tag;

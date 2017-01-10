@@ -60,6 +60,7 @@ impl Rect {
 }
 
 pub struct Client {
+    anchor_window: xlib::Window,
     config: Rc<Config>,
     pub tag: c_uchar,
     pub title: String,
@@ -90,10 +91,12 @@ impl Client {
                display: *mut xlib::Display,
                root: xlib::Window,
                window: c_ulong,
+               anchor_window: xlib::Window,
                tag: c_uchar)
                -> Client {
         let mut class_hint: xlib::XClassHint = unsafe { zeroed() };
         let mut client = Client {
+            anchor_window: anchor_window,
             config: config,
             display: display,
             root: root,
@@ -152,9 +155,15 @@ impl ClientW {
                display: *mut xlib::Display,
                root: xlib::Window,
                window: c_ulong,
+               anchor_window: xlib::Window,
                tag: c_uchar)
                -> ClientW {
-        ClientW(Rc::new(RefCell::new(Client::new(config, display, root, window, tag))))
+        ClientW(Rc::new(RefCell::new(Client::new(config,
+                                                 display,
+                                                 root,
+                                                 window,
+                                                 anchor_window,
+                                                 tag))))
     }
 
     pub fn borrow(&self) -> Ref<Client> {
@@ -441,9 +450,21 @@ impl ClientW {
 
     pub fn raise_window(&self) {
         unsafe {
-            xlib::XRaiseWindow(self.display(), self.window());
+            let mut wc: xlib::XWindowChanges = zeroed();
+            wc.stack_mode = xlib::Above;
+            wc.sibling = self.borrow().anchor_window;
+            xlib::XConfigureWindow(self.display(),
+                                   self.window(),
+                                   xlib::CWSibling as c_uint | xlib::CWStackMode as c_uint,
+                                   &mut wc);
+            let mut xevent: xlib::XEvent = zeroed();
             xlib::XSync(self.display(), 0);
+            while xlib::XCheckMaskEvent(self.display(), xlib::EnterWindowMask, &mut xevent) != 0 {}
         }
+        // unsafe {
+        //     xlib::XRaiseWindow(self.display(), self.window());
+        //     xlib::XSync(self.display(), 0);
+        // }
     }
 
     pub fn lower_window(&self) {
