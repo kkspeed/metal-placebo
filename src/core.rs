@@ -559,7 +559,9 @@ impl WindowManager {
             if tag == TAG_OVERVIEW {
                 continue;
             }
-            w.show(tag == self.current_tag || self.current_tag == TAG_OVERVIEW);
+            if tag != self.current_tag && self.current_tag != TAG_OVERVIEW {
+                w.show(false);
+            }
         }
 
         if self.current_tag == TAG_OVERVIEW {
@@ -696,6 +698,9 @@ impl WindowManager {
             trace!("on_configure_request for window: {} ", c.get_title());
             if self.current_tag == TAG_OVERVIEW {
                 c.configure();
+                // TODO: steam seems to go this path a lot of times... how to handle it
+                // in overview mode?
+                // self.arrange_windows();
             } else if (c.is_sticky() || c.tag() == self.current_tag) && c.is_floating() {
                 c.show(true);
             } else {
@@ -815,9 +820,13 @@ impl WindowManager {
                 c.update_title();
                 self.do_log();
             } else if property_event.atom == xlib::XA_WM_NORMAL_HINTS {
-                c.invalidate();
                 let tag = c.tag();
-                c.show(tag == self.current_tag);
+                if tag != TAG_OVERVIEW {
+                    // ignore size hint for overview since the window sizes are
+                    // temporary.
+                    c.invalidate();
+                    c.show(tag == self.current_tag);
+                }
             } else if property_event.atom == atoms::net_wm_window_type() {
                 self.update_window_type(c.clone());
             }

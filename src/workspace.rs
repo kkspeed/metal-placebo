@@ -241,8 +241,7 @@ impl Workspace {
         result.extend(self.clients_next
             .iter()
             .filter(pred)
-            .map(|c| c.clone())
-            .collect::<Vec<ClientW>>());
+            .map(|c| c.clone()));
         result
     }
 

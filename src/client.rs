@@ -450,21 +450,9 @@ impl ClientW {
 
     pub fn raise_window(&self) {
         unsafe {
-            let mut wc: xlib::XWindowChanges = zeroed();
-            wc.stack_mode = xlib::Above;
-            wc.sibling = self.borrow().anchor_window;
-            xlib::XConfigureWindow(self.display(),
-                                   self.window(),
-                                   xlib::CWSibling as c_uint | xlib::CWStackMode as c_uint,
-                                   &mut wc);
-            let mut xevent: xlib::XEvent = zeroed();
+            xlib::XRaiseWindow(self.display(), self.window());
             xlib::XSync(self.display(), 0);
-            while xlib::XCheckMaskEvent(self.display(), xlib::EnterWindowMask, &mut xevent) != 0 {}
         }
-        // unsafe {
-        //     xlib::XRaiseWindow(self.display(), self.window());
-        //     xlib::XSync(self.display(), 0);
-        // }
     }
 
     pub fn lower_window(&self) {
