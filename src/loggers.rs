@@ -147,7 +147,8 @@ impl Logger for XMobarLogger {
         }
 
         result += " :: ";
-        for c in current_clients {
+        for i in 0..current_clients.len() {
+            let c = current_clients[i].clone();
             let color = match &focused {
                 &Some(ref c_focused) if c_focused.window() == c.window() => {
                     self.config.client_selected_color
@@ -159,7 +160,11 @@ impl Logger for XMobarLogger {
             } else {
                 "".to_string()
             };
-            result += &format!("[<fc={}>{1:.8}</fc>] ", color, msg + &c.get_title());
+            result += &format!("[<fc={}><{}> {}{:.8}</fc>] ",
+                               color,
+                               i + 1,
+                               msg,
+                               &c.get_title());
         }
         writeln!(self.child_stdin, "{}", result).unwrap();
     }

@@ -31,7 +31,12 @@ const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut core::WindowManager))] =
       (0, keysym::XF86XK_AudioMicMute, &|_| spawn("amixer", &["set", "Capture", "toggle"])),
       (MOD_MASK | xlib::ShiftMask, keysym::XK_t, &extra::add_workspace_user_tag_dmenu),
       (MOD_MASK | xlib::ShiftMask, keysym::XK_w, &extra::add_window_user_tag_dmenu),
-      (MOD_MASK, keysym::XK_w, &extra::select_window_dmenu)];
+      (MOD_MASK, keysym::XK_w, &extra::select_window_dmenu),
+      (MOD_MASK, keysym::XK_y, &|w| w.set_focus_index(Some(0))),
+      (MOD_MASK, keysym::XK_u, &|w| w.set_focus_index(Some(1))),
+      (MOD_MASK, keysym::XK_i, &|w| w.set_focus_index(Some(2))),
+      (MOD_MASK, keysym::XK_o, &|w| w.set_focus_index(Some(3))),
+      (MOD_MASK, keysym::XK_p, &|w| w.set_focus_index(None))];
 
 const START_PROGRAMS: &'static [&'static Fn()] =
     &[&|| spawn("xcompmgr", &[]),

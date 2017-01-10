@@ -301,6 +301,18 @@ impl WindowManager {
         }
     }
 
+    pub fn set_focus_index(&mut self, index: Option<usize>) {
+        let clients = self.current_clients();
+        let i = index.unwrap_or(if clients.len() == 0 {
+            0
+        } else {
+            clients.len() - 1
+        });
+        if let Some(c) = clients.get(i) {
+            self.set_focus(c.clone());
+        }
+    }
+
     pub fn set_focus(&mut self, client: ClientW) {
         {
             let workspace = self.current_workspace_mut();
