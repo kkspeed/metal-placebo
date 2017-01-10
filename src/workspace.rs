@@ -121,7 +121,7 @@ impl Workspace {
     }
 
     pub fn kill_client(&mut self) {
-        self.detach_current().map(|client| {
+        self.client_current.as_mut().map(|client| {
             let atom = atoms::wm_delete();
             if !client.send_event(atom) {
                 x_disable_error_unsafe!(client.display(), {
