@@ -75,7 +75,8 @@ fn main() {
         .tag_layout(vec![('3' as c_uchar, Box::new(Tile13 { layout: Box::new(FullScreen) })),
                          ('9' as c_uchar, Box::new(FullScreen)),
                          (TAG_OVERVIEW as c_uchar, Box::new(Overview))]);
-    let xmobar_logger = loggers::XMobarLogger::new(loggers::LoggerConfig::default(), &[]);
+    let logger_config = loggers::LoggerConfig::default().client_title_length(15);
+    let xmobar_logger = loggers::XMobarLogger::new(logger_config, &[]);
     let mut window_manager = core::WindowManager::new(config);
     window_manager.set_logger(Box::new(xmobar_logger));
     window_manager.run();

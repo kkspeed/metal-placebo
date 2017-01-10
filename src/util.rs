@@ -112,6 +112,13 @@ pub fn spawn(command: &str, args: &[&str]) {
     }
 }
 
+pub fn truncate(s: &str, max_chars: usize) -> &str {
+    match s.char_indices().nth(max_chars) {
+        None => s,
+        Some((idx, _)) => &s[..idx],
+    }
+}
+
 #[allow(unused_variables)]
 pub extern "C" fn xerror(dpy: *mut xlib::Display, err: *mut xlib::XErrorEvent) -> c_int {
     let ee = unsafe { *err };

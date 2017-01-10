@@ -5,11 +5,13 @@ use std::process;
 
 use client::ClientW;
 use config::Config;
+use util;
 use workspace::Workspace;
 
 pub struct LoggerConfig {
     pub client_color: &'static str,
     pub client_selected_color: &'static str,
+    pub client_title_length: usize,
     pub separator_color: &'static str,
     pub tag_color: &'static str,
     pub tag_selected_color: &'static str,
@@ -23,6 +25,11 @@ impl LoggerConfig {
 
     pub fn client_selected_color(mut self, color: &'static str) -> Self {
         self.client_selected_color = color;
+        self
+    }
+
+    pub fn client_title_length(mut self, len: usize) -> Self {
+        self.client_title_length = len;
         self
     }
 
@@ -47,6 +54,7 @@ impl Default for LoggerConfig {
         LoggerConfig {
             client_color: "#FFFFFF",
             client_selected_color: "#FFFF00",
+            client_title_length: 8,
             separator_color: "#000000",
             tag_color: "#FFFFFF",
             tag_selected_color: "#00FF00",
@@ -160,11 +168,11 @@ impl Logger for XMobarLogger {
             } else {
                 "".to_string()
             };
-            result += &format!("[<fc={}><{}> {}{:.8}</fc>] ",
+            result += &format!("[<fc={}><{}> {}{}</fc>] ",
                                color,
                                i + 1,
                                msg,
-                               &c.get_title());
+                               util::truncate(&c.get_title(), self.config.client_title_length));
         }
         writeln!(self.child_stdin, "{}", result).unwrap();
     }
