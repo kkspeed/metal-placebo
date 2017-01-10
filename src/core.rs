@@ -555,6 +555,9 @@ impl WindowManager {
     fn arrange_windows(&mut self) {
         for (_, mut w) in self.workspaces.iter_mut() {
             let tag = w.tag;
+            if tag == TAG_OVERVIEW {
+                continue;
+            }
             w.show(tag == self.current_tag || self.current_tag == TAG_OVERVIEW);
         }
 
