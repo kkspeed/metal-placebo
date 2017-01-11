@@ -319,7 +319,7 @@ impl WindowManager {
             workspace.set_focus(client.clone());
             workspace.restack();
         }
-        client.send_event(atoms::wm_take_focus());
+        //        client.send_event(atoms::wm_take_focus());
         self.do_log();
     }
 

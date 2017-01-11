@@ -507,6 +507,7 @@ impl ClientW {
                                      xlib::RevertToPointerRoot,
                                      xlib::CurrentTime);
             }
+            self.send_event(atoms::wm_take_focus());
         } else {
             unsafe {
                 xlib::XSetWindowBorder(self.display(),
