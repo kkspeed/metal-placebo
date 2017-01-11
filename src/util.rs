@@ -76,24 +76,20 @@ pub fn get_text_prop(display: *mut xlib::Display,
             return None;
         }
         if name.encoding == xlib::XA_STRING {
-            log!("Get string");
             let st = CString::from_raw(name.value as *mut c_char)
                 .to_string_lossy()
                 .to_string();
-            log!("Length: {} - {}", st.len(), st);
             result = Some(st);
-            log!("Get string done");
         } else {
             if xlib::Xutf8TextPropertyToTextList(display, &mut name, &mut list, &mut n) >=
                xlib::Success as c_int && n > 0 && !(*list).is_null() {
-                log!("Get text list!");
                 let st = CString::from_raw(*list).to_string_lossy().to_string();
-                log!("Text list length: {}", st.len());
                 result = Some(st);
                 // xlib::XFreeStringList(list);
             }
         }
-        // TODO: Possible memory leak.
+        // TODO: Possible memory leak but adding the following statement will result in double
+        // free.
         // xlib::XFree(name.value as *mut c_void);
     }
     result

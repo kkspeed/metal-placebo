@@ -45,10 +45,10 @@ const START_PROGRAMS: &'static [&'static Fn()] =
       &|| spawn("/usr/lib/polkit-kde/polkit-kde-authentication-agent-1", &[])];
 
 const RULES: &'static [(&'static Fn(&ClientW) -> bool, &'static Fn(&mut ClientW))] =
-    &[(&|c| c.get_class() == "Gimp", &|c| c.set_floating(true)),
+    &[(&|c| c.get_class().as_str() == "Gimp", &|c| c.set_floating(true)),
       (&|c| c.is_dialog(), &|c| c.set_floating(true)),
-      (&|c| c.get_class() == "VirtualBox", &|c| c.set_floating(true)),
-      (&|c| c.get_class() == "Tilda",
+      (&|c| c.get_class().as_str() == "VirtualBox", &|c| c.set_floating(true)),
+      (&|c| c.get_class().as_str() == "Tilda",
        &|c| {
            c.set_floating(true);
            c.set_sticky(true);

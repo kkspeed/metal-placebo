@@ -63,9 +63,9 @@ pub struct Client {
     anchor_window: xlib::Window,
     config: Rc<Config>,
     pub tag: c_uchar,
-    pub title: String,
+    pub title: Rc<String>,
     root: xlib::Window,
-    class: String,
+    class: Rc<String>,
     was_floating: bool,
     is_floating: bool,
     is_sticky: bool,
@@ -102,8 +102,8 @@ impl Client {
             root: root,
             window: window,
             tag: tag,
-            title: "broken".to_string(),
-            class: "broken".to_string(),
+            title: Rc::new("broken".into()),
+            class: Rc::new("broken".into()),
             was_floating: false,
             is_floating: false,
             is_dialog: false,
@@ -125,7 +125,7 @@ impl Client {
             xlib::XGetClassHint(display, window, &mut class_hint);
             if !class_hint.res_class.is_null() {
                 client.class =
-                    CString::from_raw(class_hint.res_class).to_string_lossy().into_owned();
+                    Rc::new(CString::from_raw(class_hint.res_class).to_string_lossy().into_owned());
             }
         }
         client
@@ -174,18 +174,18 @@ impl ClientW {
         self.0.borrow_mut()
     }
 
-    pub fn get_title(&self) -> String {
+    pub fn get_title(&self) -> Rc<String> {
         self.borrow().title.clone()
     }
 
     pub fn update_title(&mut self) {
         self.borrow_mut().title =
-            util::get_text_prop(self.display(), self.window(), atoms::net_wm_name())
+            Rc::new(util::get_text_prop(self.display(), self.window(), atoms::net_wm_name())
                 .or(util::get_text_prop(self.display(), self.window(), xlib::XA_WM_NAME))
-                .unwrap_or("Unknown".to_string());
+                .unwrap_or("Unknown".to_string()));
     }
 
-    pub fn get_class<'a>(&self) -> String {
+    pub fn get_class(&self) -> Rc<String> {
         // TODO: Revisit: unnecessary clone.
         self.borrow().class.clone()
     }
@@ -249,11 +249,8 @@ impl ClientW {
                                                &mut dl,
                                                &mut c);
             if ret == xlib::Success as c_int && !c.is_null() {
-                log!("Success atom!");
                 let result = *(c as *mut xlib::Atom);
-                log!("Success deref!");
                 xlib::XFree(c as *mut c_void);
-                log!("Return!");
                 return Some(result);
             }
             None
@@ -299,6 +296,9 @@ impl ClientW {
             self.resize(rect, false);
             self.raise_window();
         } else {
+            if !self.borrow().is_fullscreen {
+                return;
+            }
             unsafe {
                 xlib::XChangeProperty(self.display(),
                                       self.window(),
