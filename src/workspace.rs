@@ -230,31 +230,12 @@ impl Workspace {
         }
     }
 
-    pub fn select_clients(&self, pred: &Fn(&&ClientW) -> bool) -> Vec<ClientW> {
-        let mut result: Vec<ClientW> =
-            self.clients_prev.iter().filter(pred).map(|c| c.clone()).collect();
-        if let &Some(ref c) = &self.client_current {
-            if pred(&c) {
-                result.push(c.clone());
-            }
-        }
-        result.extend(self.clients_next
-            .iter()
-            .filter(pred)
-            .map(|c| c.clone()));
-        result
+    pub fn select_clients(&self, pred: &Fn(&ClientW) -> bool) -> Vec<ClientW> {
+        self.iter().cloned().filter(pred).collect()
     }
 
     pub fn show(&mut self, visible: bool) {
-        for c in &mut self.clients_prev {
-            c.show(visible);
-        }
-
-        if let Some(c) = self.client_current.as_mut() {
-            c.show(visible);
-        }
-
-        for c in &mut self.clients_next {
+        for c in self.iter_mut() {
             c.show(visible);
         }
     }
@@ -290,5 +271,65 @@ impl Workspace {
 
     pub fn zoom(&mut self) {
         self.detach_current().map(|c| self.new_client(c, false));
+    }
+
+    pub fn iter(&self) -> WSIter {
+        WSIter {
+            current_client: self.client_current.as_ref(),
+            prev_iter: Box::new(self.clients_prev.iter()),
+            next_iter: Box::new(self.clients_next.iter()),
+            current_returned: false,
+        }
+    }
+
+    pub fn iter_mut(&mut self) -> WSIterMut {
+        WSIterMut {
+            current_client: self.client_current.as_mut(),
+            prev_iter: Box::new(self.clients_prev.iter_mut()),
+            next_iter: Box::new(self.clients_next.iter_mut()),
+            current_returned: false,
+        }
+    }
+}
+
+pub struct WSIter<'a> {
+    current_client: Option<&'a ClientW>,
+    prev_iter: Box<Iterator<Item = &'a ClientW> + 'a>,
+    next_iter: Box<Iterator<Item = &'a ClientW> + 'a>,
+    current_returned: bool,
+}
+
+impl<'a> Iterator for WSIter<'a> {
+    type Item = &'a ClientW;
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(next_client) = self.prev_iter.next() {
+            Some(next_client)
+        } else if !self.current_returned && self.current_client.is_some() {
+            self.current_returned = true;
+            self.current_client.take()
+        } else {
+            self.next_iter.next()
+        }
+    }
+}
+
+pub struct WSIterMut<'a> {
+    current_client: Option<&'a mut ClientW>,
+    prev_iter: Box<Iterator<Item = &'a mut ClientW> + 'a>,
+    next_iter: Box<Iterator<Item = &'a mut ClientW> + 'a>,
+    current_returned: bool,
+}
+
+impl<'a> Iterator for WSIterMut<'a> {
+    type Item = &'a mut ClientW;
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(next_client) = self.prev_iter.next() {
+            Some(next_client)
+        } else if !self.current_returned && self.current_client.is_some() {
+            self.current_returned = true;
+            self.current_client.take()
+        } else {
+            self.next_iter.next()
+        }
     }
 }

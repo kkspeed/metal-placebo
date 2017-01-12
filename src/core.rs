@@ -220,7 +220,7 @@ impl WindowManager {
             if v.tag == TAG_OVERVIEW {
                 continue;
             }
-            for c in v.select_clients(&|_| true).iter_mut() {
+            for c in v.iter_mut() {
                 unsafe {
                     xlib::XChangeProperty(self.display,
                                       self.root,
@@ -258,7 +258,7 @@ impl WindowManager {
             self.current_tag = tag;
         } else {
             let mut sticky_clients = self.current_workspace().select_clients(&|c| c.is_sticky());
-            for c in sticky_clients.iter() {
+            for c in sticky_clients.iter_mut() {
                 self.current_workspace_mut().remove_client(c.clone());
             }
             self.current_tag = tag;
@@ -436,13 +436,13 @@ impl WindowManager {
             if w.tag == TAG_OVERVIEW {
                 continue;
             }
-            result.extend(w.select_clients(&|_| true));
+            result.extend(w.iter().cloned());
         }
         result
     }
 
     pub fn current_clients(&self) -> Vec<ClientW> {
-        self.current_workspace().select_clients(&|_| true)
+        self.current_workspace().iter().cloned().collect()
     }
 
     pub fn get_client_by_window(&self, window: xlib::Window) -> Option<ClientW> {
@@ -712,7 +712,20 @@ impl WindowManager {
                 // in overview mode?
                 // self.arrange_windows();
             } else if (c.is_sticky() || c.tag() == self.current_tag) && c.is_floating() {
-                c.show(true);
+                let mut rect = c.get_rect();
+                if configure_request_event.value_mask & xlib::CWX as c_ulong != 0 {
+                    rect.x = configure_request_event.x;
+                }
+                if configure_request_event.value_mask & xlib::CWY as c_ulong != 0 {
+                    rect.y = configure_request_event.y;
+                }
+                if configure_request_event.value_mask & xlib::CWWidth as c_ulong != 0 {
+                    rect.width = configure_request_event.width;
+                }
+                if configure_request_event.value_mask & xlib::CWHeight as c_ulong != 0 {
+                    rect.height = configure_request_event.height;
+                }
+                c.resize(rect, false);
             } else {
                 c.configure();
                 let show = c.tag() == self.current_tag;
