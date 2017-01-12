@@ -95,6 +95,29 @@ pub fn get_text_prop(display: *mut xlib::Display,
     result
 }
 
+pub fn get_root_pointer(display: *mut xlib::Display, root: xlib::Window) -> Option<(c_int, c_int)> {
+    let mut x = 0;
+    let mut y = 0;
+    let mut di = 0;
+    let mut dui = 0;
+    let mut ddui = 0;
+    let mut dummy: xlib::Window = 0;
+
+    let result = unsafe {
+        xlib::XQueryPointer(display,
+                            root,
+                            &mut dummy,
+                            &mut dummy,
+                            &mut x,
+                            &mut y,
+                            &mut dui,
+                            &mut di,
+                            &mut ddui)
+    };
+
+    if result == 0 { None } else { Some((x, y)) }
+}
+
 pub fn clean_mask(keycode: u32) -> u32 {
     keycode & !xlib::LockMask &
     (xlib::Mod1Mask | xlib::Mod2Mask | xlib::Mod3Mask | xlib::Mod4Mask | xlib::Mod5Mask |

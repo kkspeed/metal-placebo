@@ -11,6 +11,7 @@ use std::slice;
 use x11::xlib;
 
 use atoms;
+use config;
 use config::Config;
 use util;
 
@@ -481,6 +482,17 @@ impl ClientW {
                 xlib::XGrabButton(self.display(),
                                   xlib::AnyButton as c_uint,
                                   xlib::AnyModifier,
+                                  self.window(),
+                                  0,
+                                  (xlib::ButtonPressMask | xlib::ButtonReleaseMask) as c_uint,
+                                  xlib::GrabModeAsync,
+                                  xlib::GrabModeAsync,
+                                  0,
+                                  0);
+            } else {
+                xlib::XGrabButton(self.display(),
+                                  xlib::AnyButton as c_uint,
+                                  config::MOD_MASK,
                                   self.window(),
                                   0,
                                   (xlib::ButtonPressMask | xlib::ButtonReleaseMask) as c_uint,

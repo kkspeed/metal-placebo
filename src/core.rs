@@ -1,3 +1,4 @@
+use std::cmp;
 use std::collections::HashMap;
 use std::io::Write;
 use std::mem::zeroed;
@@ -454,6 +455,130 @@ impl WindowManager {
         None
     }
 
+    pub fn move_mouse(&mut self, client: &mut ClientW) {
+        if client.is_fullscreen() {
+            return;
+        }
+
+        let rect = client.get_rect();
+        let mouse_mask = xlib::ButtonPressMask | xlib::ButtonReleaseMask | xlib::PointerMotionMask;
+        if unsafe {
+            xlib::XGrabPointer(self.display,
+                               self.root,
+                               0,
+                               mouse_mask as c_uint,
+                               xlib::GrabModeAsync,
+                               xlib::GrabModeAsync,
+                               0,
+                               0,
+                               xlib::CurrentTime) == xlib::GrabSuccess
+        } {
+            if let Some((x, y)) = util::get_root_pointer(self.display, self.root) {
+                let mut event: xlib::XEvent = unsafe { zeroed() };
+                let mut last_time: xlib::Time = 0;
+                loop {
+                    unsafe {
+                        xlib::XMaskEvent(self.display, mouse_mask, &mut event);
+                        match event.get_type() {
+                            xlib::Expose => self.on_expose_notify(&event),
+                            xlib::MapRequest => self.on_map_request(&event),
+                            xlib::ConfigureRequest => self.on_configure_request(&event),
+                            xlib::MotionNotify => {
+                                let me: xlib::XMotionEvent = xlib::XMotionEvent::from(event);
+                                if me.time - last_time < 1000 / 60 {
+                                    continue;
+                                }
+                                last_time = me.time;
+                                let nx = rect.x + me.x - x;
+                                let ny = rect.y + me.y - y;
+                                if client.is_floating() {
+                                    client.move_window(nx, ny, true);
+                                }
+                            }
+                            xlib::ButtonRelease => break,
+                            _ => (),
+                        }
+                    }
+                }
+            }
+            unsafe {
+                xlib::XUngrabPointer(self.display, xlib::CurrentTime);
+            }
+        }
+    }
+
+    fn resize_mouse(&mut self, client: &mut ClientW) {
+        if client.is_fullscreen() {
+            return;
+        }
+
+        let rect = client.get_rect();
+        let mouse_mask = xlib::ButtonPressMask | xlib::ButtonReleaseMask | xlib::PointerMotionMask;
+        if unsafe {
+            xlib::XGrabPointer(self.display,
+                               self.root,
+                               0,
+                               mouse_mask as c_uint,
+                               xlib::GrabModeAsync,
+                               xlib::GrabModeAsync,
+                               0,
+                               0,
+                               xlib::CurrentTime) == xlib::GrabSuccess
+        } {
+            unsafe {
+                xlib::XWarpPointer(self.display,
+                                   0,
+                                   client.window(),
+                                   0,
+                                   0,
+                                   0,
+                                   0,
+                                   rect.width + self.config.border_width - 1,
+                                   rect.height + self.config.border_width - 1);
+                xlib::XSync(self.display, 0);
+            }
+            let mut event: xlib::XEvent = unsafe { zeroed() };
+            let mut last_time: xlib::Time = 0;
+            loop {
+                unsafe {
+                    xlib::XMaskEvent(self.display, mouse_mask, &mut event);
+                    match event.get_type() {
+                        xlib::Expose => self.on_expose_notify(&event),
+                        xlib::MapRequest => self.on_map_request(&event),
+                        xlib::ConfigureRequest => self.on_configure_request(&event),
+                        xlib::MotionNotify => {
+                            let me: xlib::XMotionEvent = xlib::XMotionEvent::from(event);
+                            if me.time - last_time < 1000 / 60 {
+                                continue;
+                            }
+                            last_time = me.time;
+                            let nw = cmp::max(me.x - 2 * self.config.border_width - rect.x + 1, 1);
+                            let nh = cmp::max(me.y - 2 * self.config.border_width - rect.y + 1, 1);
+                            if client.is_floating() {
+                                client.resize(Rect::new(rect.x, rect.y, nw, nh), false);
+                            }
+                        }
+                        xlib::ButtonRelease => break,
+                        _ => (),
+                    }
+                }
+            }
+            unsafe {
+                let rect = client.get_rect();
+                xlib::XWarpPointer(self.display,
+                                   0,
+                                   client.window(),
+                                   0,
+                                   0,
+                                   0,
+                                   0,
+                                   rect.width + self.config.border_width - 1,
+                                   rect.height + self.config.border_width - 1);
+                xlib::XUngrabPointer(self.display, xlib::CurrentTime);
+            }
+        }
+    }
+
     fn manage_window(&mut self, window: c_ulong, xa: &xlib::XWindowAttributes) {
         let tag = if self.current_tag == TAG_OVERVIEW {
             self.config.tag_default
@@ -650,11 +775,25 @@ impl WindowManager {
 
     fn on_button_press(&mut self, event: &xlib::XEvent) {
         trace!("[on_button_press]");
-        let workspace = self.current_workspace_mut();
-        let button_event = xlib::XButtonPressedEvent::from(*event);
-        if let Some(c) = workspace.get_client_by_window(button_event.window) {
-            workspace.set_focus(c);
-            workspace.restack();
+        let button_event: xlib::XButtonPressedEvent = xlib::XButtonPressedEvent::from(*event);
+        {
+            let workspace = self.current_workspace_mut();
+            if let Some(c) = workspace.get_client_by_window(button_event.window) {
+                workspace.set_focus(c.clone());
+                workspace.restack();
+            }
+        }
+        if button_event.button == xlib::Button1 && button_event.state & MOD_MASK != 0 {
+            if let Some(mut c) = self.current_workspace()
+                .get_client_by_window(button_event.window) {
+                self.move_mouse(&mut c);
+            }
+        }
+        if button_event.button == xlib::Button3 && button_event.state & MOD_MASK != 0 {
+            if let Some(mut c) = self.current_workspace()
+                .get_client_by_window(button_event.window) {
+                self.resize_mouse(&mut c);
+            }
         }
     }
 
