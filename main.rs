@@ -2,7 +2,6 @@
 extern crate rswm;
 extern crate x11;
 
-use std::rc::Rc;
 use std::os::raw::{c_uchar, c_uint};
 use x11::{keysym, xlib};
 
@@ -75,7 +74,13 @@ fn main() {
         .tag_layout(vec![('3' as c_uchar, Box::new(Tile13 { layout: Box::new(FullScreen) })),
                          ('9' as c_uchar, Box::new(FullScreen)),
                          (TAG_OVERVIEW as c_uchar, Box::new(Overview))]);
-    let logger_config = loggers::LoggerConfig::default().client_title_length(15);
+    let logger_config = loggers::LoggerConfig::default()
+        .client_title_length(8)
+        .client_template("<fc=#CCCCCC,#006048> {{& content }} </fc>")
+        .client_selected_template("<fc=#2f2f2f,#00BFFF> {{& content }} </fc>")
+        .tag_selected_template("<fc=#FFFFFF,#D81D4E> {{& content }} </fc>")
+        .tag_template("<fc=#66595C,#FAF6EC> {{& content }} </fc>")
+        .separator("<fc=#000000,#00FA9A> </fc>");
     let xmobar_logger = loggers::XMobarLogger::new(logger_config, &[]);
     let mut window_manager = core::WindowManager::new(config);
     window_manager.set_logger(Box::new(xmobar_logger));

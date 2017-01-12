@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::os::raw::c_uchar;
 use std::process;
+use mustache;
+use mustache::MapBuilder;
 
 use client::ClientW;
 use config::Config;
@@ -9,22 +11,22 @@ use util;
 use workspace::Workspace;
 
 pub struct LoggerConfig {
-    pub client_color: &'static str,
-    pub client_selected_color: &'static str,
-    pub client_title_length: usize,
-    pub separator_color: &'static str,
-    pub tag_color: &'static str,
-    pub tag_selected_color: &'static str,
+    client_template: mustache::Template,
+    client_selected_template: mustache::Template,
+    client_title_length: usize,
+    separator: &'static str,
+    tag_template: mustache::Template,
+    tag_selected_template: mustache::Template,
 }
 
 impl LoggerConfig {
-    pub fn client_color(mut self, color: &'static str) -> Self {
-        self.client_color = color;
+    pub fn client_template(mut self, template: &str) -> Self {
+        self.client_template = mustache::compile_str(template).unwrap();
         self
     }
 
-    pub fn client_selected_color(mut self, color: &'static str) -> Self {
-        self.client_selected_color = color;
+    pub fn client_selected_template(mut self, template: &str) -> Self {
+        self.client_selected_template = mustache::compile_str(template).unwrap();
         self
     }
 
@@ -33,18 +35,18 @@ impl LoggerConfig {
         self
     }
 
-    pub fn separator_color(mut self, color: &'static str) -> Self {
-        self.separator_color = color;
+    pub fn separator(mut self, s: &'static str) -> Self {
+        self.separator = s;
         self
     }
 
-    pub fn tag_color(mut self, color: &'static str) -> Self {
-        self.tag_color = color;
+    pub fn tag_template(mut self, template: &str) -> Self {
+        self.tag_template = mustache::compile_str(template).unwrap();
         self
     }
 
-    pub fn tag_selected_color(mut self, color: &'static str) -> Self {
-        self.tag_selected_color = color;
+    pub fn tag_selected_template(mut self, template: &str) -> Self {
+        self.tag_selected_template = mustache::compile_str(template).unwrap();
         self
     }
 }
@@ -52,12 +54,14 @@ impl LoggerConfig {
 impl Default for LoggerConfig {
     fn default() -> Self {
         LoggerConfig {
-            client_color: "#FFFFFF",
-            client_selected_color: "#FFFF00",
+            client_template: mustache::compile_str("[{{& content }}] ").unwrap(),
+            client_selected_template: mustache::compile_str("[<fc=#FFFF00>{{& content }}</fc>] ")
+                .unwrap(),
             client_title_length: 8,
-            separator_color: "#000000",
-            tag_color: "#FFFFFF",
-            tag_selected_color: "#00FF00",
+            separator: " :: ",
+            tag_template: mustache::compile_str("{{& content }}").unwrap(),
+            tag_selected_template: mustache::compile_str("<fc=#00FF00>{{& content }}</fc> |")
+                .unwrap(),
         }
     }
 }
@@ -100,7 +104,7 @@ pub struct XMobarLogger {
 }
 
 impl XMobarLogger {
-    pub fn new(config: LoggerConfig, xmobar_args: &[&str]) -> XMobarLogger {
+    pub fn new(config: LoggerConfig, xmobar_args: &[&str]) -> Self {
         let process::Child { stdin: child_stdin, .. } = process::Command::new("xmobar")
             .stdin(process::Stdio::piped())
             .args(xmobar_args)
@@ -121,59 +125,57 @@ impl Logger for XMobarLogger {
             current_tag: c_uchar,
             current_clients: &Vec<ClientW>,
             focused: Option<ClientW>) {
+        fn render<W: Write, T: Into<String>>(w: &mut W,
+                                             template: &mustache::Template,
+                                             to_render: T) {
+            let content =
+                mustache::MapBuilder::new().insert_str("content", to_render.into()).build();
+            template.render_data(w, &content).unwrap();
+        }
+
         let mut tags: Vec<char> = clients.iter().map(|c| c.tag() as char).collect();
         tags.push(current_tag as char);
         tags.sort();
         tags.dedup();
-        let mut result = String::new();
         for t in &tags {
-            if *t == current_tag as char {
-                if current_tag == 0 {
-                    result += &format!("<fc={}> Overview </fc>|", self.config.tag_selected_color);
-                } else {
-                    result += &if let Some(description) =
-                        workspaces.get(&(*t as c_uchar)).unwrap().get_description() {
-                        format!("<fc={}> {} - {} </fc>|",
-                                self.config.tag_selected_color,
-                                t,
-                                description)
-                    } else {
-                        format!("<fc={}> {} </fc>|", self.config.tag_selected_color, t)
-                    };
-                }
+            let selected_template = if *t == current_tag as char {
+                &self.config.tag_selected_template
             } else {
-                result += &if let Some(description) =
+                &self.config.tag_template
+            };
+            if current_tag == 0 {
+                render(&mut self.child_stdin, selected_template, "Overview");
+            } else {
+                let string = if let Some(description) =
                     workspaces.get(&(*t as c_uchar)).unwrap().get_description() {
-                    format!("<fc={}> {} - {} </fc>|",
-                            self.config.tag_color,
-                            t,
-                            description)
+                    format!("{} - {}", t, description)
                 } else {
-                    format!("<fc={}> {} </fc>|", self.config.tag_color, t)
+                    (*t).to_string()
                 };
+                render(&mut self.child_stdin, selected_template, string);
             }
         }
-
-        result += " :: ";
+        write!(self.child_stdin, "{}", self.config.separator);
         for i in 0..current_clients.len() {
-            let c = current_clients[i].clone();
-            let color = match &focused {
-                &Some(ref c_focused) if c_focused.window() == c.window() => {
-                    self.config.client_selected_color
+            let c = &current_clients[i];
+            let selected_template = match focused.as_ref() {
+                Some(c_focused) if c_focused.window() == c.window() => {
+                    &self.config.client_selected_template
                 }
-                _ => self.config.client_color,
+                _ => &self.config.client_template,
             };
             let msg = if current_tag == 0 {
                 format!("{}@", c.tag() as char)
             } else {
                 "".to_string()
             };
-            result += &format!("[<fc={}><{}> {}{}</fc>] ",
-                               color,
-                               i + 1,
-                               msg,
-                               util::truncate(&c.get_title(), self.config.client_title_length));
+            render(&mut self.child_stdin,
+                   selected_template,
+                   format!("<{}> {}{} ",
+                           i + 1,
+                           msg,
+                           util::truncate(&c.get_title(), self.config.client_title_length)));
         }
-        writeln!(self.child_stdin, "{}", result).unwrap();
+        write!(self.child_stdin, "\n");
     }
 }

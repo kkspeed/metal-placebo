@@ -290,6 +290,7 @@ impl ClientW {
                                       xlib::PropModeReplace,
                                       (&atoms::net_wm_state_fullscreen() as *const u64) as *const u8,
                                       1);
+                xlib::XSetWindowBorderWidth(self.display(), self.window(), 0);
             }
             self.borrow_mut().is_fullscreen = true;
             self.set_floating(true);
@@ -308,6 +309,9 @@ impl ClientW {
                                       xlib::PropModeReplace,
                                       null(),
                                       0);
+                xlib::XSetWindowBorderWidth(self.display(),
+                                            self.window(),
+                                            self.borrow().config.border_width as c_uint);
             }
             let was_floating = self.borrow().was_floating;
             self.set_floating(was_floating);

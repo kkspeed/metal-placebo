@@ -291,10 +291,7 @@ impl WindowManager {
     }
 
     pub fn set_fullscreen(&mut self, client: ClientW, fullscreen: bool) {
-        client.clone().set_fullscreen(Rect::new(0,
-                                                0,
-                                                self.screen_width - 2 * self.config.border_width,
-                                                self.screen_height - 2 * self.config.border_width),
+        client.clone().set_fullscreen(Rect::new(0, 0, self.screen_width, self.screen_height),
                                       fullscreen);
         if !fullscreen {
             self.arrange_windows();
@@ -475,7 +472,9 @@ impl WindowManager {
         client.borrow_mut().save_window_size();
         client.set_border_color(self.colors.normal_border_color,
                                 self.colors.focused_border_color);
-        log!("Start to managing client: {}", client.get_title());
+        log!("Start to managing client: {}, window {}",
+             client.get_title(),
+             client.window());
         unsafe {
             xlib::XChangeProperty(self.display,
                                   self.root,
@@ -509,6 +508,11 @@ impl WindowManager {
                 r.1(&mut client);
             }
         }
+
+        log!("Client: {}, {}, floating: {}",
+             client.get_title(),
+             client.window(),
+             client.is_floating());
 
         if client.is_dock() {
             self.special_windows.push(client.clone());
@@ -605,6 +609,7 @@ impl WindowManager {
             let mut floating_clients = self.current_workspace_mut()
                 .select_clients(&|c| c.is_floating() == true);
             for fc in floating_clients.iter_mut() {
+                log!("Doing floating {}, {}", fc.window(), fc.get_title());
                 let rect = fc.get_rect();
                 fc.resize(rect, false);
                 fc.raise_window();
@@ -683,6 +688,7 @@ impl WindowManager {
                 }
                 if client_message.data.get_long(1) == atoms::net_wm_state_modal() as c_long ||
                    client_message.data.get_long(2) == atoms::net_wm_state_modal() as c_long {
+                    log!("Set modal for client: {}", c.window());
                     c.clone().set_floating(true);
                     self.arrange_windows();
                 }
@@ -752,9 +758,10 @@ impl WindowManager {
     }
 
     fn on_destroy_notify(&mut self, event: &xlib::XEvent) {
-        trace!("[on_destroy_notify]");
         let destroy_window_event = xlib::XDestroyWindowEvent::from(*event);
+        trace!("[on_destroy_notify], {}", destroy_window_event.window);
         if let Some(c) = self.get_client_by_window(destroy_window_event.window) {
+            log!("destroy window {}", c.get_title());
             self.unmanage(c.clone(), true);
         }
     }
@@ -835,9 +842,9 @@ impl WindowManager {
     fn on_property_notify(&mut self, event: &xlib::XEvent) {
         let property_event = xlib::XPropertyEvent::from(*event);
         if let Some(mut c) = self.get_client_by_window(property_event.window).as_mut() {
-            trace!("[on_property_notify] atom: {}, window: {}",
-                   atoms::get_atom(property_event.atom),
-                   c.get_title());
+            // trace!("[on_property_notify] atom: {}, window: {}",
+            //        atoms::get_atom(property_event.atom),
+            //        c.get_title());
             if property_event.atom == xlib::XA_WM_NAME ||
                property_event.atom == atoms::net_wm_name() {
                 c.update_title();
@@ -852,6 +859,9 @@ impl WindowManager {
                 }
             } else if property_event.atom == atoms::net_wm_window_type() {
                 self.update_window_type(c.clone());
+            } else if property_event.atom == xlib::XA_WM_SIZE_HINTS {
+                log!("on_property_notify: received size hints from {}",
+                     c.get_title());
             }
         }
     }
@@ -863,7 +873,9 @@ impl WindowManager {
             if unmap_event.send_event != 0 {
                 c.clone().set_state(xproto::WITHDRAWN_STATE);
             } else {
-                log!("From unmap notify!");
+                log!("unmap notify: unmanage {}, window {}",
+                     c.get_title(),
+                     c.window());
                 self.unmanage(c.clone(), false);
             }
         }

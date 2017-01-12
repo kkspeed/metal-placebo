@@ -1,4 +1,5 @@
 extern crate libc;
+extern crate mustache;
 extern crate x11;
 
 #[macro_use]
