@@ -38,7 +38,7 @@ pub extern "C" fn xerror_dummy(display: *mut xlib::Display,
                                event: *mut xlib::XErrorEvent)
                                -> c_int {
     let e: xlib::XErrorEvent = unsafe { *event };
-    debug!("[WARN] Got error {} from request {}",
+    debug!("got error {} from request {}",
          e.error_code,
          e.request_code);
     0
@@ -109,7 +109,7 @@ pub fn clean_mask(keycode: c_uint) -> c_uint {
 pub fn spawn(command: &str, args: &[&str]) {
     match process::Command::new(command).args(args).spawn() {
         Ok(_) => (),
-        Err(s) => debug!("fail to spawn process {}, error: {}", command, s),
+        Err(s) => error!("fail to spawn process {}, error: {}", command, s),
     }
 }
 
