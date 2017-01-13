@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate log;
 extern crate libc;
 extern crate mustache;
 extern crate x11;

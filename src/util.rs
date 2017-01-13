@@ -10,33 +10,17 @@ use x11::xlib;
 use xproto;
 
 #[macro_export]
-macro_rules! log(
-    ($($arg:tt)*) => { {
-        let r = writeln!(&mut ::std::io::stderr(), $($arg)*);
-        r.expect("failed printing to stderr");
-    } }
-);
-
-macro_rules! trace(
-    ($($arg:tt)*) => { {
-        if TRACE {
-            log!($($arg)*);
-        }
-    } }
-);
-
-#[macro_export]
 macro_rules! x_disable_error_unsafe {
     ( $display: expr, $s: block ) => {
         unsafe {
-            log!("Grab server");
+            debug!("grab server");
             xlib::XGrabServer($display);
             xlib::XSetErrorHandler(Some(util::xerror_dummy));
             $s
             xlib::XSync($display, 0);
             xlib::XSetErrorHandler(Some(util::xerror));
             xlib::XUngrabServer($display);
-            log!("Ungrab server");
+            debug!("ungrab server");
         }
     }
 }
@@ -56,7 +40,7 @@ pub extern "C" fn xerror_dummy(display: *mut xlib::Display,
                                event: *mut xlib::XErrorEvent)
                                -> c_int {
     let e: xlib::XErrorEvent = unsafe { *event };
-    log!("[WARN] Got error {} from request {}",
+    debug!("[WARN] Got error {} from request {}",
          e.error_code,
          e.request_code);
     0
@@ -127,7 +111,7 @@ pub fn clean_mask(keycode: u32) -> u32 {
 pub fn spawn(command: &str, args: &[&str]) {
     match process::Command::new(command).args(args).spawn() {
         Ok(_) => (),
-        Err(s) => log!("Fail to spawn process {}, error: {}", command, s),
+        Err(s) => debug!("fail to spawn process {}, error: {}", command, s),
     }
 }
 
@@ -150,10 +134,10 @@ pub extern "C" fn xerror(dpy: *mut xlib::Display, err: *mut xlib::XErrorEvent) -
        (ee.request_code == xproto::X_GrabButton && ee.error_code == xlib::BadAccess) ||
        (ee.request_code == xproto::X_GrabKey && ee.error_code == xlib::BadAccess) ||
        (ee.request_code == xproto::X_CopyArea && ee.error_code == xlib::BadDrawable) {
-        log!("rswm: error: request code={}, error code={}", ee.request_code, ee.error_code);
+        debug!("rswm: error: request code={}, error code={}", ee.request_code, ee.error_code);
         return 0;
     }
-    log!("rswm: fatal error: request code={}, error code={}\n",
+    error!("rswm: fatal error: request code={}, error code={}\n",
 			ee.request_code, ee.error_code);
     process::exit(1);
 }

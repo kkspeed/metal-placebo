@@ -134,7 +134,9 @@ impl Client {
 
     pub fn save_window_size(&mut self) {
         self.old_rect = self.rect.clone();
-        log!("Save window size: old rect: {:?}", self.old_rect);
+        debug!("save window {:x} size: old rect: {:?}",
+               self.window,
+               self.old_rect);
     }
 
     pub fn set_size(&mut self, x: c_int, y: c_int, width: c_int, height: c_int) {
@@ -434,7 +436,7 @@ impl ClientW {
                 xlib::XFree(p as *mut c_void);
             }
             if exists {
-                log!("Send event: {}", proto);
+                debug!("send event: {}", proto);
                 let mut ev: xlib::XClientMessageEvent = zeroed();
                 ev.type_ = xlib::ClientMessage; // wtf?
                 ev.window = self.window();
@@ -442,12 +444,11 @@ impl ClientW {
                 ev.format = 32;
                 ev.data.set_long(0, proto as c_long);
                 ev.data.set_long(1, xlib::CurrentTime as c_long);
-                let status = xlib::XSendEvent(self.display(),
-                                              self.window(),
-                                              0,
-                                              xlib::NoEventMask,
-                                              &mut xlib::XEvent::from(ev));
-                log!("Status: {}", status);
+                xlib::XSendEvent(self.display(),
+                                 self.window(),
+                                 0,
+                                 xlib::NoEventMask,
+                                 &mut xlib::XEvent::from(ev));
             }
         }
         exists

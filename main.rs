@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate rswm;
+extern crate env_logger;
 extern crate x11;
 
 use std::os::raw::{c_uchar, c_uint};
@@ -62,9 +63,10 @@ const TAG_DESCRIPTION: &'static [(c_uchar, &'static str)] = &[('1' as c_uchar, "
                                                               ('2' as c_uchar, "代码")];
 
 fn main() {
+    env_logger::init().unwrap();
     let config = Config::default()
         .border_width(2)
-        .bar_height(19)
+        .bar_height(31)
         .addtional_keys(KEYS)
         .start_programs(START_PROGRAMS)
         .tag_keys(TAG_KEYS)

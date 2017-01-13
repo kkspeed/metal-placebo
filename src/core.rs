@@ -597,9 +597,9 @@ impl WindowManager {
         client.borrow_mut().save_window_size();
         client.set_border_color(self.colors.normal_border_color,
                                 self.colors.focused_border_color);
-        log!("Start to managing client: {}, window {}",
-             client.get_title(),
-             client.window());
+        debug!("start to managing client: {}, window {}",
+               client.get_title(),
+               client.window());
         unsafe {
             xlib::XChangeProperty(self.display,
                                   self.root,
@@ -633,11 +633,6 @@ impl WindowManager {
                 r.1(&mut client);
             }
         }
-
-        log!("Client: {}, {}, floating: {}",
-             client.get_title(),
-             client.window(),
-             client.is_floating());
 
         if client.is_dock() {
             self.special_windows.push(client.clone());
@@ -734,7 +729,6 @@ impl WindowManager {
             let mut floating_clients = self.current_workspace_mut()
                 .select_clients(&|c| c.is_floating() == true);
             for fc in floating_clients.iter_mut() {
-                log!("Doing floating {}, {}", fc.window(), fc.get_title());
                 let rect = fc.get_rect();
                 fc.resize(rect, false);
                 fc.raise_window();
@@ -751,22 +745,23 @@ impl WindowManager {
     }
 
     fn update_window_type(&mut self, client: ClientW) {
-        log!("updating window type {}", client.get_title());
         if let Some(state) = client.get_atom(atoms::net_wm_state()) {
             if state == atoms::net_wm_state_fullscreen() {
-                log!("update window type to full screen");
+                debug!("update window {} to full screen.", client.get_title());
                 self.set_fullscreen(client.clone(), true);
             }
             if state == atoms::net_wm_state_above() {
+                debug!("update window {} above.", client.get_title());
                 client.clone().set_above(true);
             }
             if state == atoms::net_wm_state_modal() {
+                debug!("update window {} to modal.", client.get_title());
                 client.clone().set_floating(true);
             }
         }
         if let Some(tp) = client.get_atom(atoms::net_wm_window_type()) {
             if tp == atoms::net_wm_window_type_dock() {
-                log!("find a dock window");
+                debug!("found a dock window {}.", client.get_title());
                 let mut c = client.clone();
                 c.set_dock(true);
             }
@@ -774,7 +769,6 @@ impl WindowManager {
     }
 
     fn on_button_press(&mut self, event: &xlib::XEvent) {
-        trace!("[on_button_press]");
         let button_event: xlib::XButtonPressedEvent = xlib::XButtonPressedEvent::from(*event);
         {
             let workspace = self.current_workspace_mut();
@@ -798,23 +792,22 @@ impl WindowManager {
     }
 
     fn on_client_message(&mut self, event: &xlib::XEvent) {
-        trace!("[on_client_message]");
         let client_message: xlib::XClientMessageEvent = xlib::XClientMessageEvent::from(*event);
-        log!("Got client message atom {}, window: {}, state: {}, {}, {}",
-             atoms::get_atom(client_message.message_type),
-             client_message.window,
-             client_message.data.get_long(0),
-             client_message.data.get_long(1),
-             client_message.data.get_long(2));
+        debug!("client message atom {}, window: {}, state: {}, {}, {}",
+               atoms::get_atom(client_message.message_type),
+               client_message.window,
+               client_message.data.get_long(0),
+               client_message.data.get_long(1),
+               client_message.data.get_long(2));
         if let Some(title) = util::get_text_prop(self.display,
                                                  client_message.window,
                                                  atoms::net_wm_name()) {
-            log!(" window {}, title: {}, state: {}, {}, {}",
-                 client_message.window,
-                 title,
-                 client_message.data.get_long(0),
-                 client_message.data.get_long(1),
-                 client_message.data.get_long(2));
+            debug!(" window {}, title: {}, state: {}, {}, {}",
+                   client_message.window,
+                   title,
+                   client_message.data.get_long(0),
+                   client_message.data.get_long(1),
+                   client_message.data.get_long(2));
         }
         if let Some(c) = self.get_client_by_window(client_message.window) {
             if client_message.message_type == atoms::net_wm_state() {
@@ -822,12 +815,12 @@ impl WindowManager {
                    client_message.data.get_long(2) == atoms::net_wm_state_fullscreen() as c_long {
                     let fullscreen = client_message.data.get_long(0) == 1 ||
                                      (client_message.data.get_long(0) == 2 && !c.is_fullscreen());
-                    log!("Client message: set_fullscreen: {}", fullscreen);
+                    debug!("client message: set_fullscreen: {}", fullscreen);
                     self.set_fullscreen(c.clone(), fullscreen);
                 }
                 if client_message.data.get_long(1) == atoms::net_wm_state_modal() as c_long ||
                    client_message.data.get_long(2) == atoms::net_wm_state_modal() as c_long {
-                    log!("Set modal for client: {}", c.window());
+                    debug!("set modal for client: {}", c.window());
                     c.clone().set_floating(true);
                     self.arrange_windows();
                 }
@@ -836,11 +829,10 @@ impl WindowManager {
     }
 
     fn on_configure_request(&mut self, event: &xlib::XEvent) {
-        trace!("[on_configure_request]");
         let mut xa: xlib::XWindowChanges = unsafe { zeroed() };
         let mut configure_request_event = xlib::XConfigureRequestEvent::from(*event);
         if let Some(mut c) = self.get_client_by_window(configure_request_event.window) {
-            trace!("on_configure_request for window: {} ", c.get_title());
+            debug!("on_configure_request for window: {} ", c.get_title());
             if self.current_tag == TAG_OVERVIEW {
                 xa.sibling = configure_request_event.above;
                 xa.stack_mode = configure_request_event.detail;
@@ -852,10 +844,6 @@ impl WindowManager {
                                            configure_request_event.value_mask as c_uint,
                                            &mut xa);
                 }
-                // c.configure();
-                // TODO: steam seems to go this path a lot of times... how to handle it
-                // in overview mode?
-                // self.arrange_windows();
             } else if (c.is_sticky() || c.tag() == self.current_tag) && c.is_floating() {
                 let mut rect = c.get_rect();
                 if configure_request_event.value_mask & xlib::CWX as c_ulong != 0 {
@@ -898,24 +886,25 @@ impl WindowManager {
 
     fn on_destroy_notify(&mut self, event: &xlib::XEvent) {
         let destroy_window_event = xlib::XDestroyWindowEvent::from(*event);
-        trace!("[on_destroy_notify], {}", destroy_window_event.window);
         if let Some(c) = self.get_client_by_window(destroy_window_event.window) {
-            log!("destroy window {}", c.get_title());
+            debug!("destroy window: {:x}, title: {}", c.window(), c.get_title());
             self.unmanage(c.clone(), true);
         }
     }
 
     fn on_enter_notify(&mut self, event: &xlib::XEvent) {
-        trace!("[on_enter_notify]: not implemented!");
+        debug!("[on_enter_notify]: not implemented!");
     }
 
     fn on_expose_notify(&mut self, event: &xlib::XEvent) {
-        trace!("[on_expose_notify]: not implemented!");
+        debug!("[on_expose_notify]: not implemented!");
     }
 
     fn on_focus_in(&mut self, event: &xlib::XEvent) {
-        trace!("[on_focus_in]");
         if let Some(client) = self.current_focused() {
+            debug!("focus in for: {:x} title: {}",
+                   client.window(),
+                   client.get_title());
             if !client.is_floating() {
                 self.current_workspace_mut().restack();
             }
@@ -925,7 +914,6 @@ impl WindowManager {
     }
 
     fn on_key_press(&mut self, event: &xlib::XEvent) {
-        trace!("[on_key_press]");
         unsafe {
             let key_event = xlib::XKeyEvent::from(*event);
             let keysym = xlib::XKeycodeToKeysym(self.display, key_event.keycode as u8, 0);
@@ -948,7 +936,7 @@ impl WindowManager {
     }
 
     fn on_mapping_notify(&mut self, event: &xlib::XEvent) {
-        trace!("[on_mapping_notify]");
+        debug!("[on_mapping_notify]");
         let mut mapping_event = xlib::XMappingEvent::from(*event);
         unsafe {
             xlib::XRefreshKeyboardMapping(&mut mapping_event);
@@ -959,13 +947,13 @@ impl WindowManager {
     }
 
     fn on_map_request(&mut self, event: &xlib::XEvent) {
-        trace!("[on_map_request]");
         unsafe {
             let map_request_event = xlib::XMapRequestEvent::from(*event);
+            debug!("map request for window {}", map_request_event.window);
             let mut xa: xlib::XWindowAttributes = zeroed();
             if xlib::XGetWindowAttributes(self.display, map_request_event.window, &mut xa) == 0 ||
                xa.override_redirect != 0 {
-                log!("Got override redirect.");
+                debug!("map request got override redirect");
                 return;
             }
             if self.get_client_by_window(map_request_event.window).is_none() {
@@ -981,9 +969,6 @@ impl WindowManager {
     fn on_property_notify(&mut self, event: &xlib::XEvent) {
         let property_event = xlib::XPropertyEvent::from(*event);
         if let Some(mut c) = self.get_client_by_window(property_event.window).as_mut() {
-            // trace!("[on_property_notify] atom: {}, window: {}",
-            //        atoms::get_atom(property_event.atom),
-            //        c.get_title());
             if property_event.atom == xlib::XA_WM_NAME ||
                property_event.atom == atoms::net_wm_name() {
                 c.update_title();
@@ -999,22 +984,21 @@ impl WindowManager {
             } else if property_event.atom == atoms::net_wm_window_type() {
                 self.update_window_type(c.clone());
             } else if property_event.atom == xlib::XA_WM_SIZE_HINTS {
-                log!("on_property_notify: received size hints from {}",
-                     c.get_title());
+                debug!("on_property_notify: received size hints from {}",
+                       c.get_title());
             }
         }
     }
 
     fn on_unmap_notify(&mut self, event: &xlib::XEvent) {
-        trace!("[on_unmap_notify]");
         let unmap_event = xlib::XUnmapEvent::from(*event);
         if let Some(c) = self.get_client_by_window(unmap_event.window) {
             if unmap_event.send_event != 0 {
                 c.clone().set_state(xproto::WITHDRAWN_STATE);
             } else {
-                log!("unmap notify: unmanage {}, window {}",
-                     c.get_title(),
-                     c.window());
+                debug!("unmap notify: unmanage {}, window {}",
+                       c.get_title(),
+                       c.window());
                 self.unmanage(c.clone(), false);
             }
         }

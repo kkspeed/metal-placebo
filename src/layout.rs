@@ -104,7 +104,7 @@ impl Layout for Overview {
         for i in 0..clients.len() {
             result.push((clients[i].clone(), rects[i].clone()));
         }
-        log!("Got overview clients: {}", result.len());
+        debug!("overview # of clients: {}", result.len());
         result
     }
 
