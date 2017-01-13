@@ -39,18 +39,76 @@ Put <tt>target/debug/rswm</tt> in your path.
 ~~~
 
 ### Trouble Shotting
-By default, a lot of information is emitted to stderr of the window manager. Simply redirect it to a
-log file (and sorry about the messy output, I plan to fix it in the future).
+By default, the window manager uses log level to control the amount of information emitted. To turn on logging,
+set <tt>RUST_LOG=debug</tt> in your environement, then a lot of information is emitted to stderr of the window manager. 
+Simply redirect it to a log file.
 
 ### Configuration
-I aim to provide interface that you can assemble your window manager on your own. But currently it's working in 
-progress and the functionality is limited. See <tt>main.rs</tt> how you can modify / tweak it. Defaulting Mod key
-can be done in <tt>src/config.rs</tt>, which should be fixed in the future.
+I aim to provide the interface that you can assemble your window manager on your own. But currently it's working in 
+progress and the functionality is limited. <tt>main.rs</tt> is what I'm using on my own machine. It's highly personally 
+flavoured but could be a reference point for your configuration.See <tt>main.rs</tt> how you can modify / tweak it. 
+Defaulting Mod key can be done in <tt>src/config.rs</tt>, which should be fixed in the future.
 
 
 ### Usage
-See <tt>KEYS</tt> constant in <tt>main.rs</tt> and <tt>config.rs</tt> for the list of combination keys 
+#### Keys defined in <tt>src/config.rs</tt>
+
+| Keys                 | Functionality                                                                                |
+|----------------------|----------------------------------------------------------------------------------------------|
+| Mod4 + Q             | Quit                                                                                         |
+| Mod4 + J             | Focus next window                                                                            |
+| Mod4 + K             | Focus previous window                                                                        |
+| Mod4 + F4            | Kill window                                                                                  |
+| Mod4 + M             | Maximize window (only work for non-floating window)                                          |
+| Mod4 + Left arrow    | Move window left (only work for floating window)                                             |
+| Mod4 + Right arrow   | Move window right (only work for floating window)                                            |
+| Mod4 + Up arrow      | Move window up (only work for floating window)                                               |
+| Mod4 + Down arrow    | Move window down (only work for floating window)                                             |
+| Mod4 + Shift + Up    | Reduce window height (only work for floating window)                                         |
+| Mod4 + Shift + Down  | Increase window height (only work for floating window)                                       |
+| Mod4 + Shift + Left  | Reduce window width (only work for floating window)                                          |
+| Mod4 + Shift + Right | Increase window width (only work for floating window)                                        |
+| Mod4 + F2            | Go to overview                                                                               |
+| Mod4 + Return        | Bump current window to the 1st in client list. Switch to current window if in overview mode. |
+| Mod4 + 1 - 9         | Go to tag 1 - 9                                                                              |
+| Mod4 + Mouse1        | Move window (only work for floating window)                                                  |
+| Mod4 + Mouse3        | Resize window (only work for floating window)                                                |
+
+#### Keys defined in <tt>main.rs</tt>
+To enjoy full functionality, you should install the corresponding packages.
+
+| Key                | Functionality                                                    |
+|--------------------|------------------------------------------------------------------|
+| Mod4 + R           | spawn <tt>dmenu_run</tt>                                         |
+| Mod4 + T           | spawn <tt>urxvt</tt>                                             |
+| Mod4 + Print       | spawn <tt>scrot</tt> for screenshot                              |
+| Mod4 + Alt + Print | spawn <tt>scrot</tt> for screnshot by allowing selecting regions |
+| Mod4 + F           | spawn <tt>pcmanfm</tt>                                           |
+| Mod4 + L           | spawn <tt>i3lock</tt>                                            |
+| Mod4 + Shift + T   | add tag annotation to current workspace                          |
+| Mod4 + Shift + W   | add tag annotation to current window                             |
+| Mod4 + W           | look for window by typing                                        |
+| Mod4 + Y           | focus the 1st client in current workspace                        |
+| Mod4 + U           | focus the 2nd client in current workspace                        |
+| Mod4 + I           | focus the 3rd client in current workspace                        |
+| Mod4 + O           | focus the 4th client in current workspace                        |
+| Mod4 + P           | focus the last client in current workspace                       |
+
+For more information, see <tt>KEYS</tt> constant in <tt>main.rs</tt> and <tt>config.rs</tt> for the list of combination keys 
 and functionality.
+
+#### Initial Spawning Programs
+The window manager spawns a bunch of programs, defined in <tt>main.rs</tt>. It's highly likely you want to delete / add 
+your own. The defined ones in <tt>main.rs</tt> are:
+
+| Command              | Description                                                                                |
+|----------------------|----------------------------------------------------------------------------------------------|
+| xcompmgr             | allow transparency  |
+| fcitx                | input method |
+| tilda                | dropdown terminal |
+| polkit agent kde     | polkit tool |
+
+
 
 ## Warning and Future Work
 This window manager is absolutely in its infancy, meaning it could crash, could leak memory and could blow up your
