@@ -291,7 +291,7 @@ impl ClientW {
                                       xlib::XA_ATOM,
                                       32,
                                       xlib::PropModeReplace,
-                                      (&atoms::net_wm_state_fullscreen() as *const u64) as *const u8,
+                                      (&atoms::net_wm_state_fullscreen() as *const c_ulong) as *const u8,
                                       1);
                 xlib::XSetWindowBorderWidth(self.display(), self.window(), 0);
             }
@@ -383,7 +383,8 @@ impl ClientW {
         unsafe {
             xlib::XConfigureWindow(self.display(),
                                    self.window(),
-                                   (xlib::CWX | xlib::CWY | xlib::CWWidth | xlib::CWHeight) as u32,
+                                   (xlib::CWX | xlib::CWY | xlib::CWWidth |
+                                    xlib::CWHeight) as c_uint,
                                    &mut xc);
             xlib::XSync(self.display(), 0);
         }
@@ -517,7 +518,7 @@ impl ClientW {
                                       xlib::XA_WINDOW,
                                       32,
                                       xlib::PropModeReplace,
-                                      &self.window() as *const u64 as *const u8,
+                                      &self.window() as *const c_ulong as *const u8,
                                       1);
                 xlib::XSetInputFocus(self.display(),
                                      self.window(),

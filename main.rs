@@ -66,7 +66,7 @@ fn main() {
     env_logger::init().unwrap();
     let config = Config::default()
         .border_width(2)
-        .bar_height(31)
+        .bar_height(19)
         .addtional_keys(KEYS)
         .start_programs(START_PROGRAMS)
         .tag_keys(TAG_KEYS)

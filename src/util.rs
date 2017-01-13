@@ -1,7 +1,5 @@
 use std::ffi::CString;
-use std::io;
-use std::io::{Read, Write};
-use std::os::raw::{c_char, c_int};
+use std::os::raw::{c_char, c_int, c_uint};
 use std::mem::zeroed;
 use std::process;
 
@@ -102,7 +100,7 @@ pub fn get_root_pointer(display: *mut xlib::Display, root: xlib::Window) -> Opti
     if result == 0 { None } else { Some((x, y)) }
 }
 
-pub fn clean_mask(keycode: u32) -> u32 {
+pub fn clean_mask(keycode: c_uint) -> c_uint {
     keycode & !xlib::LockMask &
     (xlib::Mod1Mask | xlib::Mod2Mask | xlib::Mod3Mask | xlib::Mod4Mask | xlib::Mod5Mask |
      xlib::ShiftMask | xlib::ControlMask)

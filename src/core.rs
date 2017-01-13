@@ -172,6 +172,7 @@ impl WindowManager {
             xlib::ButtonPress => self.on_button_press(event),
             xlib::ClientMessage => self.on_client_message(event),
             xlib::ConfigureRequest => self.on_configure_request(event),
+            xlib::ConfigureNotify => self.on_configure_notify(event),
             xlib::DestroyNotify => self.on_destroy_notify(event),
             xlib::EnterNotify => self.on_enter_notify(event),
             xlib::Expose => self.on_expose_notify(event),
@@ -191,10 +192,10 @@ impl WindowManager {
             let modifiers = vec![0, xlib::LockMask];
             for &key in keys {
                 unsafe {
-                    let code = xlib::XKeysymToKeycode(self.display, key.1 as u64);
+                    let code = xlib::XKeysymToKeycode(self.display, key.1 as c_ulong);
                     for modifier in modifiers.iter() {
                         xlib::XGrabKey(self.display,
-                                       code as i32,
+                                       code as c_int,
                                        key.0 | modifier,
                                        self.root,
                                        1,
@@ -881,6 +882,16 @@ impl WindowManager {
 
         unsafe {
             xlib::XSync(self.display, 0);
+        }
+    }
+
+    fn on_configure_notify(&mut self, event: &xlib::XEvent) {
+        let ce: xlib::XConfigureEvent = xlib::XConfigureEvent::from(*event);
+        if ce.window == self.root &&
+           (ce.width != self.screen_width || ce.height != self.screen_height) {
+            self.screen_width = ce.width;
+            self.screen_height = ce.height;
+            self.arrange_windows();
         }
     }
 
