@@ -25,6 +25,9 @@ Simply clone the repo and run
 
     cargo build
 
+It's recommended that you build with **Rust nightly (at least 1.14)** since there is some discrepancy
+in FFI callback syntax.
+
 Put <tt>target/debug/rswm</tt> in your path.
 - For <tt>.xinitrc</tt>, put <tt> exec rswm</tt> in your xinitrc.
 - If you are using a display manager (DM), put the following code in <tt>/usr/share/xsessions/rswm.desktop</tt>:
