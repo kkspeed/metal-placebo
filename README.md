@@ -39,9 +39,8 @@ Put <tt>target/debug/rswm</tt> in your path.
 ~~~
 
 ### Trouble Shotting
-By default, the window manager uses log level to control the amount of information emitted. To turn on logging,
-set <tt>RUST_LOG=debug</tt> in your environement, then a lot of information is emitted to stderr of the window manager. 
-Simply redirect it to a log file.
+By default, the window manager emits log to <tt>~/rswm_error.log</tt>. You can modify this in <tt>init_logging</tt> 
+in <tt>main.rs</tt>.
 
 ### Configuration
 I aim to provide the interface that you can assemble your window manager on your own. But currently it's working in 

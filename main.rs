@@ -1,6 +1,8 @@
 #[macro_use]
 extern crate rswm;
-extern crate env_logger;
+
+extern crate log;
+extern crate log4rs;
 extern crate x11;
 
 use std::os::raw::{c_uchar, c_uint};
@@ -59,11 +61,30 @@ const TAG_KEYS: &'static (&'static [(c_uint, c_uint, &'static Fn(&mut core::Wind
                                               xlib::ShiftMask,
                                               ['1', '2', '3', '4', '5', '6', '7', '8', '9']);
 
-const TAG_DESCRIPTION: &'static [(c_uchar, &'static str)] = &[('1' as c_uchar, "网页"),
-                                                              ('2' as c_uchar, "代码")];
+const TAG_DESCRIPTION: &'static [(c_uchar, &'static str)] = &[('1' as c_uchar, "web"),
+                                                              ('2' as c_uchar, "code")];
+
+fn init_logging(filter: log::LogLevelFilter) {
+    use log4rs::append::file::FileAppender;
+    use log4rs::encode::pattern::PatternEncoder;
+    use log4rs::config::{Appender, Config, Root};
+
+    let root = FileAppender::builder()
+        .encoder(Box::new(PatternEncoder::new("[{d(%H:%M:%S)} \\({l}\\)] {M}:{L}: {m}{n}")))
+        .build("rswm_error.log")
+        .unwrap();
+    let config = Config::builder()
+        .appender(Appender::builder().build("root", Box::new(root)))
+        .build(Root::builder()
+            .appender("root")
+            .build(filter))
+        .unwrap();
+    log4rs::init_config(config).expect("fail to initialize logger");
+}
 
 fn main() {
-    env_logger::init().unwrap();
+    init_logging(log::LogLevelFilter::Debug);
+
     let config = Config::default()
         .border_width(2)
         .bar_height(19)

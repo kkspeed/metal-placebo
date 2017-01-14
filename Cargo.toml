@@ -4,7 +4,7 @@ version = "0.0.0"
 
 [dependencies]
 log = "*"
-env_logger = "*"
+log4rs = "*"
 libc = "*"
 mustache = "*"
 
