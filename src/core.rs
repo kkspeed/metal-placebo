@@ -920,10 +920,7 @@ impl WindowManager {
             debug!("focus in for: {:x} title: {}",
                    client.window(),
                    client.get_title());
-            if !client.is_floating() {
-                self.current_workspace_mut().restack();
-            }
-            self.current_workspace_mut().set_focus(client);
+            self.set_focus(client);
             self.do_log();
         }
     }
