@@ -138,6 +138,7 @@ impl Layout for Overview {
             result = tmp;
         }
 
+        result.sort_by_key(|r| (r.y, r.x));
         result
     }
 }
