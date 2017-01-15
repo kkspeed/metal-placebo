@@ -619,6 +619,7 @@ impl WindowManager {
                                        xlib::CWBorderWidth as c_uint,
                                        &mut wc);
                 xlib::XSetWindowBorder(self.display, window, self.colors.normal_border_color);
+                client.configure();
             }
             xlib::XSelectInput(self.display,
                                window,
@@ -626,7 +627,7 @@ impl WindowManager {
                                xlib::PropertyChangeMask |
                                xlib::StructureNotifyMask);
             client.grab_buttons(false);
-            xlib::XMapWindow(self.display, window);
+            client.set_state(xproto::NORMAL_STATE);
         }
 
         for r in self.config.rules {
@@ -643,6 +644,9 @@ impl WindowManager {
                 workspace.new_client(client.clone(), client.is_floating());
             }
             self.arrange_windows();
+        }
+        unsafe {
+            xlib::XMapWindow(self.display, window);
         }
     }
 

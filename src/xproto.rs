@@ -123,3 +123,4 @@ pub const X_NoOperation: c_uchar = 127;
 
 pub const XC_LEFT_PTR: c_uint = 68;
 pub const WITHDRAWN_STATE: c_ulong = 0;
+pub const NORMAL_STATE: c_ulong = 1;

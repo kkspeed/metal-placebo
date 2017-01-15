@@ -365,9 +365,9 @@ impl ClientW {
         // resize to repaint, especially gtk 2 windows: emacs, lxterminal etc.
         let mut rect = self.get_rect();
         rect.width = rect.width + 1;
-        self.resize(rect.clone(), false);
+        self.resize(rect.clone(), true);
         rect.width = rect.width - 1;
-        self.resize(rect, false);
+        self.resize(rect, true);
     }
 
     pub fn resize(&mut self, rect: Rect, temporary: bool) {
