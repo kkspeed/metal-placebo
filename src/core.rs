@@ -292,6 +292,14 @@ impl WindowManager {
         }
     }
 
+    pub fn toggle_floating(&mut self) {
+        if let Some(mut c) = self.current_focused() {
+            let floating = c.is_floating();
+            c.set_floating(!floating);
+            self.arrange_windows();
+        }
+    }
+
     pub fn set_fullscreen(&mut self, client: ClientW, fullscreen: bool) {
         client.clone().set_fullscreen(Rect::new(0, 0, self.screen_width, self.screen_height),
                                       fullscreen);
@@ -628,6 +636,7 @@ impl WindowManager {
                                xlib::StructureNotifyMask);
             client.grab_buttons(false);
             client.set_state(xproto::NORMAL_STATE);
+            xlib::XMapWindow(self.display, window);
         }
 
         for r in self.config.rules {
@@ -644,9 +653,6 @@ impl WindowManager {
                 workspace.new_client(client.clone(), client.is_floating());
             }
             self.arrange_windows();
-        }
-        unsafe {
-            xlib::XMapWindow(self.display, window);
         }
     }
 

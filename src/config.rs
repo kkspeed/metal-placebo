@@ -26,6 +26,7 @@ const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))] =
       (MOD_MASK, keysym::XK_k, &|w| w.shift_focus(-1)),
       (MOD_MASK, keysym::XK_F4, &|w| w.kill_client()),
       (MOD_MASK, keysym::XK_m, &|w| w.toggle_maximize()),
+      (MOD_MASK, keysym::XK_u, &|w| w.toggle_floating()),
       (MOD_MASK, keysym::XK_Left, &|w| w.shift_window(-WINDOW_MOVE_DELTA, 0)),
       (MOD_MASK, keysym::XK_Right, &|w| w.shift_window(WINDOW_MOVE_DELTA, 0)),
       (MOD_MASK, keysym::XK_Up, &|w| w.shift_window(0, -WINDOW_MOVE_DELTA)),
