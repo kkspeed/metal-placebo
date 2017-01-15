@@ -99,10 +99,11 @@ fn main() {
                          (TAG_OVERVIEW as c_uchar, Box::new(Overview))]);
     let logger_config = loggers::LoggerConfig::default()
         .client_title_length(8)
-        .client_template("<fc=#CCCCCC,#006048> {{& content }} </fc>")
-        .client_selected_template("<fc=#2f2f2f,#00BFFF> {{& content }} </fc>")
+        .client_template("<fc=#CCCCCC,#006048> <{{& tag }}> {{& content }} </fc>")
+        .client_selected_template("<fc=#2f2f2f,#00BFFF> <{{& tag }}> {{& content }} </fc>")
         .tag_selected_template("<fc=#FFFFFF,#D81D4E> {{& content }} </fc>")
-        .tag_template("<fc=#66595C,#FAF6EC> {{& content }} </fc>")
+        .tag_template("<fc=#66595C,#FAF6EC> <action=`xdotool key super+{{& tag }}` button=1>{{& \
+                       content }}</action> </fc>")
         .separator("<fc=#000000,#00FA9A> </fc>");
     let xmobar_logger = loggers::XMobarLogger::new(logger_config, &[]);
     let mut window_manager = core::WindowManager::new(config);

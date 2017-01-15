@@ -1036,9 +1036,7 @@ impl WindowManager {
             let mut event: xlib::XEvent = zeroed();
             let display = self.display;
             while xlib::XNextEvent(display, &mut event) == 0 {
-                {
-                    self.handle_event(&event);
-                }
+                self.handle_event(&event);
             }
         }
     }

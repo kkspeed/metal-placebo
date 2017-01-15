@@ -125,11 +125,14 @@ impl Logger for XMobarLogger {
             current_tag: c_uchar,
             current_clients: &Vec<ClientW>,
             focused: Option<ClientW>) {
-        fn render<W: Write, T: Into<String>>(w: &mut W,
-                                             template: &mustache::Template,
-                                             to_render: T) {
-            let content =
-                mustache::MapBuilder::new().insert_str("content", to_render.into()).build();
+        fn render<W: Write, T1: Into<String>, T2: Into<String>>(w: &mut W,
+                                                                template: &mustache::Template,
+                                                                to_render: T1,
+                                                                tag: T2) {
+            let content = mustache::MapBuilder::new()
+                .insert_str("content", to_render.into())
+                .insert_str("tag", tag.into())
+                .build();
             template.render_data(w, &content).unwrap();
         }
 
@@ -144,7 +147,10 @@ impl Logger for XMobarLogger {
                 &self.config.tag_template
             };
             if current_tag == 0 {
-                render(&mut self.child_stdin, selected_template, "Overview");
+                render(&mut self.child_stdin,
+                       selected_template,
+                       "Overview",
+                       t.to_string());
             } else {
                 let string = if let Some(description) =
                     workspaces.get(&(*t as c_uchar)).unwrap().get_description() {
@@ -152,7 +158,10 @@ impl Logger for XMobarLogger {
                 } else {
                     (*t).to_string()
                 };
-                render(&mut self.child_stdin, selected_template, string);
+                render(&mut self.child_stdin,
+                       selected_template,
+                       string,
+                       t.to_string());
             }
         }
         write!(self.child_stdin, "{}", self.config.separator);
@@ -171,10 +180,10 @@ impl Logger for XMobarLogger {
             };
             render(&mut self.child_stdin,
                    selected_template,
-                   format!("<{}> {}{} ",
-                           i + 1,
+                   format!("{}{} ",
                            msg,
-                           util::truncate(&c.get_title(), self.config.client_title_length)));
+                           util::truncate(&c.get_title(), self.config.client_title_length)),
+                   (i + 1).to_string());
         }
         write!(self.child_stdin, "\n");
     }
