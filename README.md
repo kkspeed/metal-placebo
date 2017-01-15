@@ -75,7 +75,7 @@ Defaulting Mod key can be done in <tt>src/config.rs</tt>, which should be fixed 
 | Mod4 + 1 - 9         | Go to tag 1 - 9                                                                              |
 | Mod4 + Mouse1        | Move window (only work for floating window)                                                  |
 | Mod4 + Mouse3        | Resize window (only work for floating window)                                                |
-| Mod4 + U             | Toggle floating / tiled state of focused window.                                             |
+| Mod4 + E             | Toggle floating / tiled state of focused window.                                             |
 
 #### Keys defined in <tt>main.rs</tt>
 To enjoy full functionality, you should install the corresponding packages.
