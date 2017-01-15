@@ -922,11 +922,14 @@ impl WindowManager {
     }
 
     fn on_focus_in(&mut self, event: &xlib::XEvent) {
+        let event: xlib::XFocusInEvent = xlib::XFocusInEvent::from(*event);
         if let Some(client) = self.current_focused() {
             debug!("focus in for: {:x} title: {}",
                    client.window(),
                    client.get_title());
-            self.set_focus(client);
+            if client.window() != event.window {
+                self.set_focus(client);
+            }
             self.do_log();
         }
     }
