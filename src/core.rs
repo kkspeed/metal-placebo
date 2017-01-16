@@ -781,12 +781,9 @@ impl WindowManager {
 
     fn on_button_press(&mut self, event: &xlib::XEvent) {
         let button_event: xlib::XButtonPressedEvent = xlib::XButtonPressedEvent::from(*event);
-        {
-            let workspace = self.current_workspace_mut();
-            if let Some(c) = workspace.get_client_by_window(button_event.window) {
-                workspace.set_focus(c.clone());
-                workspace.restack();
-            }
+        if let Some(c) = self.get_client_by_window(button_event.window) {
+            self.set_focus(c.clone());
+            self.current_workspace_mut().restack();
         }
         if button_event.button == xlib::Button1 && button_event.state & MOD_MASK != 0 {
             if let Some(mut c) = self.current_workspace()

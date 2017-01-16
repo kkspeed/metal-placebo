@@ -12,6 +12,10 @@ interface to find windows of interest.
 
 ![Overview](https://raw.githubusercontent.com/kkspeed/metal-placebo/master/images/overview.png)
 
+or even:
+
+![Overview](https://raw.githubusercontent.com/kkspeed/metal-placebo/master/images/overview_2.png)
+
 ### Switching by Typing
 Navigate windows with [dmenu](http://tools.suckless.org/dmenu/) (requires dmenu to be installed).
 Typing a few characters with the window's class, title or self-defined tag to narrow down search
