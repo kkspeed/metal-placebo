@@ -1,0 +1,54 @@
+! This section is meant for high DPI screens. 
+! You may need to delete this section if the
+! text looks too big to you.
+Xft.dpi: 200
+Xft.autohint: 0
+Xft.lcdfilter:  lcddefault
+Xft.hintstyle:  hintfull
+Xft.hinting: 1
+Xft.antialias: 1
+Xft.rgba: rgb
+
+! Input Method
+URxvt.preeditType:OffTheSpot
+URxvt.inputMethod:fcitx
+
+! Fonts
+URxvt.font: xft:Bitstream Vera Sans Mono:size=10:atialias=true:hinting=true,xft:文泉驿等宽微米黑:size=10
+URxvt.boldfont: xft:Bitstream Vera Sans Mono:bold:size=10:atialias=true:hinting=true, xft:文泉驿等宽微米黑:style=BOld:size=10
+
+! Save lines
+URxvt.saveLines:10000
+
+! Style
+URxvt.visualBell: true
+URxvt*shading: 20
+URxvt.depth: 32
+URxvt.background: [70]#000000
+URxvt.foreground: #cccccc
+URxvt.colorBD:yellow
+URxvt.colorUL:green
+URxvt.cursorColor: #eeeeee
+URxvt.color0:black
+URxvt.color1:red2
+URxvt.color2:springgreen
+URxvt.color3:wheat3
+URxvt.color4:RoyalBlue
+URxvt.color5:Magenta2
+URxvt.color6:steelblue1
+URxvt.color7:gray85
+URxvt.color8:Gray50
+URxvt.color9:orangered2
+URxvt.color10:Green2
+URxvt.color11:lightgoldenrod2
+URxvt.color12:skyblue1
+URxvt.color13:pink1
+URxvt.color14:Cyan2
+URxvt.color15:Gray95
+URxvt.scrollBar:False
+
+! extensions
+URxvt.perl-ext-common: default,tabbed
+URxvt.tabbed.tab-fg: 12
+URxvt.tabbed.tab-bg: 0
+URxvt.tabbed.tabbar-fg: 4

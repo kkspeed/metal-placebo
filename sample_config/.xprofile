@@ -1,0 +1,17 @@
+#!/bin/bash
+export GTK_IM_MODULE=fcitx
+export QT_IM_MODULE=fcitx
+export XMODIFIERS=@im=fcitx
+
+export _JAVA_AWT_WM_NONREPARENTING=1
+
+trayer --edge top --align right \
+       --widthtype percent --width 10 \
+       --SetDockType true --SetPartialStrut true \
+       --transparent true --alpha 0 --tint 0x000000 \
+       --expand true --heighttype pixel --height 32 &
+volti &
+xautolock -time 5 -locker 'i3lock -c 000000 -n' &
+nm-applet &
+parcellite &
+blueman-applet &

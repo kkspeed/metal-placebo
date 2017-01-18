@@ -1,0 +1,6 @@
+[Desktop Entry]
+Encoding=UTF-8
+Name=RSWM
+Type=Application
+Exec=rswm
+Comment=A naive tiling window manager
