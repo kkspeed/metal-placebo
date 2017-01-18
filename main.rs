@@ -38,7 +38,8 @@ const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut core::WindowManager))] =
       (MOD_MASK, keysym::XK_u, &|w| w.set_focus_index(Some(1))),
       (MOD_MASK, keysym::XK_i, &|w| w.set_focus_index(Some(2))),
       (MOD_MASK, keysym::XK_o, &|w| w.set_focus_index(Some(3))),
-      (MOD_MASK, keysym::XK_p, &|w| w.set_focus_index(None))];
+      (MOD_MASK, keysym::XK_p, &|w| w.set_focus_index(None)),
+      (MOD_MASK, keysym::XK_Tab, &|w| w.toggle_back())];
 
 const START_PROGRAMS: &'static [&'static Fn()] =
     &[&|| spawn("xcompmgr", &[]),

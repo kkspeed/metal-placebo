@@ -61,6 +61,46 @@ impl Colors {
     }
 }
 
+struct BackStack {
+    stack: Vec<ClientW>,
+}
+
+impl BackStack {
+    fn new() -> Self {
+        BackStack { stack: Vec::new() }
+    }
+
+    fn peek(&self) -> Option<&ClientW> {
+        let len = self.stack.len();
+        if len > 0 {
+            Some(&self.stack[len - 1])
+        } else {
+            None
+        }
+    }
+
+    fn pop(&mut self) -> Option<ClientW> {
+        self.stack.pop()
+    }
+
+    fn push(&mut self, client: ClientW) {
+        let position = self.stack.iter().position(|c| c.window() == client.window());
+        let c = if let Some(index) = position {
+            self.stack.remove(index)
+        } else {
+            client
+        };
+        self.stack.push(c);
+    }
+
+    fn remove(&mut self, client: ClientW) {
+        let position = self.stack.iter().position(|c| c.window() == client.window());
+        if let Some(index) = position {
+            self.stack.remove(index);
+        }
+    }
+}
+
 pub struct WindowManager {
     config: Rc<Config>,
     display: *mut xlib::Display,
@@ -73,6 +113,7 @@ pub struct WindowManager {
     pub special_windows: ClientL,
     colors: Colors,
     pub workspaces: HashMap<c_uchar, Workspace>,
+    back_stack: BackStack,
     logger: Box<Logger + 'static>,
 }
 
@@ -97,6 +138,7 @@ impl WindowManager {
             special_windows: Vec::new(),
             colors: Colors::new(config.clone(), display, root),
             logger: Box::new(loggers::DummyLogger::new(loggers::LoggerConfig::default())),
+            back_stack: BackStack::new(),
             workspaces: HashMap::new(),
         };
 
@@ -256,6 +298,12 @@ impl WindowManager {
     }
 
     pub fn select_tag(&mut self, tag: c_uchar) {
+        if tag == self.current_tag {
+            return;
+        }
+
+        let old_client = self.current_focused();
+
         if tag == TAG_OVERVIEW {
             self.current_tag = tag;
         } else {
@@ -276,10 +324,27 @@ impl WindowManager {
                                  xlib::CurrentTime);
         }
         self.arrange_windows();
+        // TODO: This logic is a bit messy.. could be cleared up.
         if let Some(c) = self.current_focused() {
+            if let Some(oc) = old_client {
+                if oc.window() != c.window() {
+                    self.back_stack.push(oc.clone());
+                }
+            }
             self.set_focus(c);
+        } else {
+            if let Some(oc) = old_client {
+                self.back_stack.push(oc.clone());
+            }
         }
         self.do_log();
+    }
+
+    pub fn toggle_back(&mut self) {
+        if let Some(c) = self.back_stack.pop() {
+            self.select_tag(c.tag());
+            self.set_focus(c);
+        }
     }
 
     pub fn toggle_maximize(&mut self) {
@@ -668,6 +733,7 @@ impl WindowManager {
                     let real_workspace = self.workspaces.get_mut(&c.tag()).unwrap();
                     real_workspace.remove_client(c.clone());
                 }
+                self.back_stack.remove(c.clone());
                 let workspace = self.current_workspace_mut();
                 workspace.remove_client(c);
             }

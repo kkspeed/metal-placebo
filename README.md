@@ -5,7 +5,7 @@ of reassurance that it's a working x11 window manager.
 
 ![Tiling](https://raw.githubusercontent.com/kkspeed/metal-placebo/master/images/tiling.png)
 
-## Features 
+## Features
 ### Overview Mode
 Overview mode gives a view of all windows, which provides a more intuive
 interface to find windows of interest.
@@ -46,13 +46,13 @@ Put <tt>target/debug/rswm</tt> in your path.
 ~~~
 
 ### Trouble Shotting
-By default, the window manager emits log to <tt>~/rswm_error.log</tt>. You can modify this in <tt>init_logging</tt> 
+By default, the window manager emits log to <tt>~/rswm_error.log</tt>. You can modify this in <tt>init_logging</tt>
 in <tt>main.rs</tt>.
 
 ### Configuration
-I aim to provide the interface that you can assemble your window manager on your own. But currently it's working in 
-progress and the functionality is limited. <tt>main.rs</tt> is what I'm using on my own machine. It's highly personally 
-flavoured but could be a reference point for your configuration.See <tt>main.rs</tt> how you can modify / tweak it. 
+I aim to provide the interface that you can assemble your window manager on your own. But currently it's working in
+progress and the functionality is limited. <tt>main.rs</tt> is what I'm using on my own machine. It's highly personally
+flavoured but could be a reference point for your configuration.See <tt>main.rs</tt> how you can modify / tweak it.
 Defaulting Mod key can be done in <tt>src/config.rs</tt>, which should be fixed in the future.
 
 
@@ -100,12 +100,13 @@ To enjoy full functionality, you should install the corresponding packages.
 | Mod4 + I           | focus the 3rd client in current workspace                        |
 | Mod4 + O           | focus the 4th client in current workspace                        |
 | Mod4 + P           | focus the last client in current workspace                       |
+| Mod4 + Tab         | alters between 2 recent workspaces                               |
 
-For more information, see <tt>KEYS</tt> constant in <tt>main.rs</tt> and <tt>config.rs</tt> for the list of combination keys 
+For more information, see <tt>KEYS</tt> constant in <tt>main.rs</tt> and <tt>config.rs</tt> for the list of combination keys
 and functionality.
 
 #### Initial Spawning Programs
-The window manager spawns a bunch of programs, defined in <tt>main.rs</tt>. It's highly likely you want to delete / add 
+The window manager spawns a bunch of programs, defined in <tt>main.rs</tt>. It's highly likely you want to delete / add
 your own. The defined ones in <tt>main.rs</tt> are:
 
 | Command              | Description                                                                                |
