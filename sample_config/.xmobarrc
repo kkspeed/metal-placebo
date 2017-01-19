@@ -26,7 +26,7 @@ Config {
      ],
      sepChar = "%",
      alignSep = "}{",
-     template = "%UnsafeStdinReader% }{ %multicpu%   %memory%  %battery% <fc=#FFFFCC>%date%</fc>"
+     template = "%UnsafeStdinReader% }{ %multicpu%   %memory%  %battery% <fc=#FFFFCC>%date%</fc>   "
 }
 
 -- vi: ft=haskell

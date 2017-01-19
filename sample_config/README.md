@@ -10,14 +10,14 @@ I use <tt>rxvt-unicode</tt> as my terminal. The <tt>.Xresources</tt>
 contains default configuration for <tt>rxvt-unicode</tt>. Other auto
 start programs include:
 
-| Program    | Description                              |
-|------------|------------------------------------------|
-| trayer     | Systray                                  |
-| volti      | Volume control on systray                |
-| xautolock  | Auto locks the system                    |
-| i3lock     | Used by xautolock to lock screen         |
-| nm-applet  | NetworkManager frontend                  |
-| parcellite | Clipboard manager                        |
+| Program                  | Description                              |
+|--------------------------|------------------------------------------|
+| trayer / stalonetray     | Systray                                  |
+| volti                    | Volume control on systray                |
+| xautolock                | Auto locks the system                    |
+| i3lock                   | Used by xautolock to lock screen         |
+| nm-applet                | NetworkManager frontend                  |
+| parcellite               | Clipboard manager                        |
 
 I use xmobar as the system bar (and it's the only supported so far for
 the window manager). The configuration is included in <tt>.xmobarrc</tt>.

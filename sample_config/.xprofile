@@ -10,6 +10,8 @@ trayer --edge top --align right \
        --SetDockType true --SetPartialStrut true \
        --transparent true --alpha 0 --tint 0x000000 \
        --expand true --heighttype pixel --height 32 &
+# or use stalonetray
+# stalonetray &
 volti &
 xautolock -time 5 -locker 'i3lock -c 000000 -n' &
 nm-applet &
