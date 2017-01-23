@@ -100,19 +100,25 @@ impl Logger for DummyLogger {
 
 pub struct XMobarLogger {
     config: LoggerConfig,
-    child_stdin: process::ChildStdin,
+    child: process::Child,
+}
+
+impl Drop for XMobarLogger {
+    fn drop(&mut self) {
+        self.child.kill().unwrap_or_else(|_| ());
+    }
 }
 
 impl XMobarLogger {
     pub fn new(config: LoggerConfig, xmobar_args: &[&str]) -> Self {
-        let process::Child { stdin: child_stdin, .. } = process::Command::new("xmobar")
+        let child = process::Command::new("xmobar")
             .stdin(process::Stdio::piped())
             .args(xmobar_args)
             .spawn()
             .expect("cannot spawn xmobar");
         XMobarLogger {
             config: config,
-            child_stdin: child_stdin.unwrap(),
+            child: child,
         }
     }
 }
@@ -147,7 +153,7 @@ impl Logger for XMobarLogger {
                 &self.config.tag_template
             };
             if current_tag == 0 {
-                render(&mut self.child_stdin,
+                render(self.child.stdin.as_mut().unwrap(),
                        selected_template,
                        "Overview",
                        t.to_string());
@@ -158,13 +164,15 @@ impl Logger for XMobarLogger {
                 } else {
                     (*t).to_string()
                 };
-                render(&mut self.child_stdin,
+                render(self.child.stdin.as_mut().unwrap(),
                        selected_template,
                        string,
                        t.to_string());
             }
         }
-        write!(self.child_stdin, "{}", self.config.separator);
+        write!(self.child.stdin.as_mut().unwrap(),
+               "{}",
+               self.config.separator);
         for i in 0..current_clients.len() {
             let c = &current_clients[i];
             let selected_template = match focused.as_ref() {
@@ -178,13 +186,13 @@ impl Logger for XMobarLogger {
             } else {
                 "".to_string()
             };
-            render(&mut self.child_stdin,
+            render(self.child.stdin.as_mut().unwrap(),
                    selected_template,
                    format!("{}{} ",
                            msg,
                            util::truncate(&c.get_title(), self.config.client_title_length)),
                    (i + 1).to_string());
         }
-        write!(self.child_stdin, "\n");
+        write!(self.child.stdin.as_mut().unwrap(), "\n");
     }
 }
