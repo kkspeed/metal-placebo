@@ -734,7 +734,7 @@ impl WindowManager {
                     real_workspace.remove_client(c.clone());
                 }
                 self.back_stack.remove(c.clone());
-                let workspace = self.current_workspace_mut();
+                let workspace = self.workspaces.get_mut(&c.tag()).unwrap();
                 workspace.remove_client(c);
             }
             self.update_client_list();
