@@ -16,54 +16,7 @@ use rswm::loggers;
 use rswm::layout::{Tile, Tile13, FullScreen, Overview, Layout};
 use rswm::util::spawn;
 
-const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut core::WindowManager))] =
-    &[(MOD_MASK, keysym::XK_r, &|_| spawn("dmenu_run", &[])),
-      (MOD_MASK, keysym::XK_t, &|_| spawn("urxvt", &[])),
-      (MOD_MASK, keysym::XK_Print, &|_| spawn("scrot", &["-e", "mv $f ~/"])),
-      (MOD_MASK | xlib::Mod1Mask,
-       keysym::XK_Print,
-       &|_| spawn("scrot", &["-s", "-e", "mv $f ~/"])),
-      (MOD_MASK, keysym::XK_f, &|_| spawn("pcmanfm", &[])),
-      (MOD_MASK, keysym::XK_l, &|_| spawn("i3lock", &["-c", "000000", "-n"])),
-      (0, keysym::XF86XK_MonBrightnessUp, &|_| spawn("xbrightness", &["+10000"])),
-      (0, keysym::XF86XK_MonBrightnessDown, &|_| spawn("xbrightness", &["-10000"])),
-      (0, keysym::XF86XK_AudioRaiseVolume, &|_| spawn("amixer", &["set", "Master", "5000+"])),
-      (0, keysym::XF86XK_AudioLowerVolume, &|_| spawn("amixer", &["set", "Master", "5000-"])),
-      (0, keysym::XF86XK_AudioMute, &|_| spawn("amixer", &["set", "Master", "toggle"])),
-      (0, keysym::XF86XK_AudioMicMute, &|_| spawn("amixer", &["set", "Capture", "toggle"])),
-      (MOD_MASK | xlib::ShiftMask, keysym::XK_t, &extra::add_workspace_user_tag_dmenu),
-      (MOD_MASK | xlib::ShiftMask, keysym::XK_w, &extra::add_window_user_tag_dmenu),
-      (MOD_MASK, keysym::XK_w, &extra::select_window_dmenu),
-      (MOD_MASK, keysym::XK_y, &|w| w.set_focus_index(Some(0))),
-      (MOD_MASK, keysym::XK_u, &|w| w.set_focus_index(Some(1))),
-      (MOD_MASK, keysym::XK_i, &|w| w.set_focus_index(Some(2))),
-      (MOD_MASK, keysym::XK_o, &|w| w.set_focus_index(Some(3))),
-      (MOD_MASK, keysym::XK_p, &|w| w.set_focus_index(None)),
-      (MOD_MASK, keysym::XK_Tab, &|w| w.toggle_back())];
-
-const START_PROGRAMS: &'static [&'static Fn()] =
-    &[&|| spawn("xcompmgr", &[]),
-      &|| spawn("fcitx", &[]),
-      &|| spawn("tilda", &["--hidden"]),
-      &|| spawn("/usr/lib/polkit-kde/polkit-kde-authentication-agent-1", &[])];
-
-const RULES: &'static [(&'static Fn(&ClientW) -> bool, &'static Fn(&mut ClientW))] =
-    &[(&|c| c.get_class().as_str() == "Gimp", &|c| c.set_floating(true)),
-      (&|c| c.is_dialog(), &|c| c.set_floating(true)),
-      (&|c| c.get_class().as_str() == "VirtualBox", &|c| c.set_floating(true)),
-      (&|c| c.get_class().as_str() == "Tilda",
-       &|c| {
-           c.set_floating(true);
-           c.set_sticky(true);
-       })];
-
-const TAG_KEYS: &'static (&'static [(c_uint, c_uint, &'static Fn(&mut core::WindowManager))],
-          &'static [c_uchar]) = &define_tags!(MOD_MASK,
-                                              xlib::ShiftMask,
-                                              ['1', '2', '3', '4', '5', '6', '7', '8', '9']);
-
-const TAG_DESCRIPTION: &'static [(c_uchar, &'static str)] = &[('1' as c_uchar, "web"),
-                                                              ('2' as c_uchar, "code")];
+const MOD_MASK: c_uint = xlib::Mod4Mask;
 
 fn init_logging(filter: log::LogLevelFilter) {
     use log4rs::append::file::FileAppender;
@@ -86,15 +39,76 @@ fn init_logging(filter: log::LogLevelFilter) {
 fn main() {
     init_logging(log::LogLevelFilter::Debug);
 
-    let config = Config::default()
+    let keys: Vec<(c_uint, c_uint, WmAction)> =
+        vec![(MOD_MASK, keysym::XK_r, Box::new(|_| spawn("dmenu_run", &[]))),
+             (MOD_MASK, keysym::XK_t, Box::new(|_| spawn("urxvt", &[]))),
+             (MOD_MASK, keysym::XK_Print, Box::new(|_| spawn("scrot", &["-e", "mv $f ~/"]))),
+             (MOD_MASK | xlib::Mod1Mask,
+              keysym::XK_Print,
+              Box::new(|_| spawn("scrot", &["-s", "-e", "mv $f ~/"]))),
+             (MOD_MASK, keysym::XK_f, Box::new(|_| spawn("pcmanfm", &[]))),
+             (MOD_MASK, keysym::XK_l, Box::new(|_| spawn("i3lock", &["-c", "000000", "-n"]))),
+             (0, keysym::XF86XK_MonBrightnessUp, Box::new(|_| spawn("xbrightness", &["+10000"]))),
+             (0,
+              keysym::XF86XK_MonBrightnessDown,
+              Box::new(|_| spawn("xbrightness", &["-10000"]))),
+             (0,
+              keysym::XF86XK_AudioRaiseVolume,
+              Box::new(|_| spawn("amixer", &["set", "Master", "5000+"]))),
+             (0,
+              keysym::XF86XK_AudioLowerVolume,
+              Box::new(|_| spawn("amixer", &["set", "Master", "5000-"]))),
+             (0,
+              keysym::XF86XK_AudioMute,
+              Box::new(|_| spawn("amixer", &["set", "Master", "toggle"]))),
+             (0,
+              keysym::XF86XK_AudioMicMute,
+              Box::new(|_| spawn("amixer", &["set", "Capture", "toggle"]))),
+             (MOD_MASK | xlib::ShiftMask,
+              keysym::XK_t,
+              Box::new(extra::add_workspace_user_tag_dmenu)),
+             (MOD_MASK | xlib::ShiftMask,
+              keysym::XK_w,
+              Box::new(extra::add_window_user_tag_dmenu)),
+             (MOD_MASK, keysym::XK_w, Box::new(extra::select_window_dmenu)),
+             (MOD_MASK, keysym::XK_y, Box::new(|w| w.set_focus_index(Some(0)))),
+             (MOD_MASK, keysym::XK_u, Box::new(|w| w.set_focus_index(Some(1)))),
+             (MOD_MASK, keysym::XK_i, Box::new(|w| w.set_focus_index(Some(2)))),
+             (MOD_MASK, keysym::XK_o, Box::new(|w| w.set_focus_index(Some(3)))),
+             (MOD_MASK, keysym::XK_p, Box::new(|w| w.set_focus_index(None))),
+             (MOD_MASK, keysym::XK_Tab, Box::new(|w| w.toggle_back()))];
+
+    let start_programs: Vec<StartAction> =
+        vec![Box::new(|| spawn("xcompmgr", &[])),
+             Box::new(|| spawn("fcitx", &[])),
+             Box::new(|| spawn("tilda", &["--hidden"])),
+             Box::new(|| spawn("/usr/lib/polkit-kde/polkit-kde-authentication-agent-1", &[]))];
+
+    let rules: Vec<(ClientPredicate, ClientAction)> =
+        vec![(Box::new(|c| c.get_class().as_str() == "Gimp"), Box::new(|c| c.set_floating(true))),
+             (Box::new(|c| c.is_dialog()), Box::new(|c| c.set_floating(true))),
+             (Box::new(|c| c.get_class().as_str() == "VirtualBox"),
+              Box::new(|c| c.set_floating(true))),
+             (Box::new(|c| c.get_class().as_str() == "Tilda"),
+              Box::new(|c| {
+                  c.set_floating(true);
+                  c.set_sticky(true);
+              }))];
+
+    let tag_description: Vec<(c_uchar, String)> = vec![('1' as c_uchar, "web".into()),
+                                                       ('2' as c_uchar, "code".into())];
+
+    let config = Config::new(MOD_MASK)
         .border_width(2)
-        .bar_height(19)
-        .addtional_keys(KEYS)
-        .start_programs(START_PROGRAMS)
-        .tag_keys(TAG_KEYS)
+        .bar_height(18)
+        .addtional_keys(keys)
+        .start_programs(start_programs)
+        .tag_keys(define_tags!(MOD_MASK,
+                               xlib::ShiftMask,
+                               ['1', '2', '3', '4', '5', '6', '7', '8', '9']))
         .tag_default('1' as c_uchar)
-        .rules(RULES)
-        .tag_description(TAG_DESCRIPTION)
+        .rules(rules)
+        .tag_description(tag_description)
         .tag_layout(vec![('3' as c_uchar, Box::new(Tile13 { layout: Box::new(FullScreen) })),
                          ('9' as c_uchar, Box::new(FullScreen)),
                          (TAG_OVERVIEW as c_uchar, Box::new(Overview))]);

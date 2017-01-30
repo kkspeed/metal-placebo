@@ -17,68 +17,96 @@ const BAR_HEIGHT: c_int = 15;
 const WINDOW_MOVE_DELTA: c_int = 15;
 const WINDOW_EXPAND_DELTA: c_int = 10;
 
-pub const MOD_MASK: c_uint = xlib::Mod4Mask;
-
-#[allow(unused_variables)]
-const KEYS: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))] =
-    &[(MOD_MASK, keysym::XK_q, &|w| process::exit(0)),
-      (MOD_MASK, keysym::XK_j, &|w| w.shift_focus(1)),
-      (MOD_MASK, keysym::XK_k, &|w| w.shift_focus(-1)),
-      (MOD_MASK, keysym::XK_F4, &|w| w.kill_client()),
-      (MOD_MASK, keysym::XK_m, &|w| w.toggle_maximize()),
-      (MOD_MASK, keysym::XK_e, &|w| w.toggle_floating()),
-      (MOD_MASK, keysym::XK_Left, &|w| w.shift_window(-WINDOW_MOVE_DELTA, 0)),
-      (MOD_MASK, keysym::XK_Right, &|w| w.shift_window(WINDOW_MOVE_DELTA, 0)),
-      (MOD_MASK, keysym::XK_Up, &|w| w.shift_window(0, -WINDOW_MOVE_DELTA)),
-      (MOD_MASK, keysym::XK_Down, &|w| w.shift_window(0, WINDOW_MOVE_DELTA)),
-      (MOD_MASK | xlib::ShiftMask, keysym::XK_Up, &|w| w.expand_height(-WINDOW_EXPAND_DELTA)),
-      (MOD_MASK | xlib::ShiftMask, keysym::XK_Down, &|w| w.expand_height(WINDOW_EXPAND_DELTA)),
-      (MOD_MASK | xlib::ShiftMask, keysym::XK_Right, &|w| w.expand_width(WINDOW_EXPAND_DELTA)),
-      (MOD_MASK | xlib::ShiftMask, keysym::XK_Left, &|w| w.expand_width(-WINDOW_EXPAND_DELTA)),
-      (MOD_MASK, keysym::XK_F2, &|w| w.select_tag(TAG_OVERVIEW)),
-      (MOD_MASK,
-       keysym::XK_Return,
-       &|w| {
-        if w.current_tag != TAG_OVERVIEW {
-            w.zoom();
-        } else {
-            if let Some(current_client) = w.current_focused() {
-                w.select_tag(current_client.tag());
-                w.set_focus(current_client);
-            }
-        }
-    })];
-
-const TAG_KEYS: &'static (&'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))],
-          &'static [c_uchar]) = &define_tags!(MOD_MASK,
-                                              xlib::ShiftMask,
-                                              ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']);
-
 pub const TAG_OVERVIEW: c_uchar = 0 as c_uchar;
 
+pub type WmAction = Box<Fn(&mut WindowManager)>;
+pub type ClientPredicate = Box<Fn(&ClientW) -> bool>;
+pub type ClientAction = Box<Fn(&mut ClientW)>;
+pub type StartAction = Box<Fn()>;
+
 pub struct Config {
-    pub add_keys: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))],
+    pub mod_key: c_uint,
+    pub add_keys: Vec<(c_uint, c_uint, WmAction)>,
     pub bar_height: c_int,
     pub border_width: c_int,
     pub focused_border_color: &'static str,
-    pub keys: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))],
+    pub keys: Vec<(c_uint, c_uint, WmAction)>,
     pub normal_border_color: &'static str,
     pub overview_inset: c_int,
-    pub rules: &'static [(&'static Fn(&ClientW) -> bool, &'static Fn(&mut ClientW))],
-    pub start_programs: &'static [&'static Fn()],
-    pub tags: &'static [c_uchar],
+    pub rules: Vec<(ClientPredicate, ClientAction)>,
+    pub start_programs: Vec<StartAction>,
+    pub tags: Vec<c_uchar>,
     pub tag_default: c_uchar,
-    pub tag_description: &'static [(c_uchar, &'static str)],
-    pub tag_keys: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))],
+    pub tag_description: Vec<(c_uchar, String)>,
+    pub tag_keys: Vec<(c_uint, c_uint, WmAction)>,
     pub tag_layout: Vec<(c_uchar, Box<Layout + 'static>)>,
     pub window_expand_delta: c_int,
     pub window_move_delta: c_int,
 }
 
 impl Config {
-    pub fn addtional_keys(mut self,
-                          keys: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))])
-                          -> Config {
+    pub fn new(mod_mask: c_uint) -> Config {
+        let keys: Vec<(c_uint, c_uint, WmAction)> =
+            vec![(mod_mask, keysym::XK_q, Box::new(|w| process::exit(0))),
+                 (mod_mask, keysym::XK_j, Box::new(|w| w.shift_focus(1))),
+                 (mod_mask, keysym::XK_k, Box::new(|w| w.shift_focus(-1))),
+                 (mod_mask, keysym::XK_F4, Box::new(|w| w.kill_client())),
+                 (mod_mask, keysym::XK_m, Box::new(|w| w.toggle_maximize())),
+                 (mod_mask, keysym::XK_e, Box::new(|w| w.toggle_floating())),
+                 (mod_mask, keysym::XK_Left, Box::new(|w| w.shift_window(-WINDOW_MOVE_DELTA, 0))),
+                 (mod_mask, keysym::XK_Right, Box::new(|w| w.shift_window(WINDOW_MOVE_DELTA, 0))),
+                 (mod_mask, keysym::XK_Up, Box::new(|w| w.shift_window(0, -WINDOW_MOVE_DELTA))),
+                 (mod_mask, keysym::XK_Down, Box::new(|w| w.shift_window(0, WINDOW_MOVE_DELTA))),
+                 (mod_mask | xlib::ShiftMask,
+                  keysym::XK_Up,
+                  Box::new(|w| w.expand_height(-WINDOW_EXPAND_DELTA))),
+                 (mod_mask | xlib::ShiftMask,
+                  keysym::XK_Down,
+                  Box::new(|w| w.expand_height(WINDOW_EXPAND_DELTA))),
+                 (mod_mask | xlib::ShiftMask,
+                  keysym::XK_Right,
+                  Box::new(|w| w.expand_width(WINDOW_EXPAND_DELTA))),
+                 (mod_mask | xlib::ShiftMask,
+                  keysym::XK_Left,
+                  Box::new(|w| w.expand_width(-WINDOW_EXPAND_DELTA))),
+                 (mod_mask, keysym::XK_F2, Box::new(|w| w.select_tag(TAG_OVERVIEW))),
+                 (mod_mask,
+                  keysym::XK_Return,
+                  Box::new(|w| {
+                if w.current_tag != TAG_OVERVIEW {
+                    w.zoom();
+                } else {
+                    if let Some(current_client) = w.current_focused() {
+                        w.select_tag(current_client.tag());
+                        w.set_focus(current_client);
+                    }
+                }
+            }))];
+        let (tag_keys, tags) = define_tags!(mod_mask,
+                                            xlib::ShiftMask,
+                                            ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']);
+        Config {
+            mod_key: mod_mask,
+            add_keys: Vec::new(),
+            bar_height: BAR_HEIGHT,
+            border_width: BORDER_WIDTH,
+            focused_border_color: FOCUSED_BORDER_COLOR,
+            normal_border_color: NORMAL_BORDER_COLOR,
+            keys: keys,
+            overview_inset: OVERVIEW_INSET,
+            rules: vec![],
+            start_programs: vec![],
+            tag_default: tags[0],
+            tags: tags,
+            tag_description: vec![],
+            tag_keys: tag_keys,
+            tag_layout: Vec::new(),
+            window_expand_delta: WINDOW_EXPAND_DELTA,
+            window_move_delta: WINDOW_MOVE_DELTA,
+        }
+    }
+
+    pub fn addtional_keys(mut self, keys: Vec<(c_uint, c_uint, WmAction)>) -> Config {
         self.add_keys = keys;
         self
     }
@@ -98,15 +126,13 @@ impl Config {
         self
     }
 
-    pub fn keys(mut self,
-                keys: &'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))])
-                -> Config {
+    pub fn keys(mut self, keys: Vec<(c_uint, c_uint, WmAction)>) -> Config {
         self.keys = keys;
         self
     }
 
     pub fn no_default_keys(mut self) -> Config {
-        self.tag_keys = &[];
+        self.tag_keys = Vec::new();
         self
     }
 
@@ -120,14 +146,12 @@ impl Config {
         self
     }
 
-    pub fn rules(mut self,
-                 rules: &'static [(&'static Fn(&ClientW) -> bool, &'static Fn(&mut ClientW))])
-                 -> Config {
+    pub fn rules(mut self, rules: Vec<(ClientPredicate, ClientAction)>) -> Config {
         self.rules = rules;
         self
     }
 
-    pub fn start_programs(mut self, start: &'static [&'static Fn()]) -> Config {
+    pub fn start_programs(mut self, start: Vec<StartAction>) -> Config {
         self.start_programs = start;
         self
     }
@@ -137,15 +161,12 @@ impl Config {
         self
     }
 
-    pub fn tag_description(mut self, description: &'static [(c_uchar, &'static str)]) -> Config {
+    pub fn tag_description(mut self, description: Vec<(c_uchar, String)>) -> Config {
         self.tag_description = description;
         self
     }
 
-    pub fn tag_keys(mut self,
-                    keys: &'static (&'static [(c_uint, c_uint, &'static Fn(&mut WindowManager))],
-                                    &'static [c_uchar]))
-                    -> Config {
+    pub fn tag_keys(mut self, keys: (Vec<(c_uint, c_uint, WmAction)>, Vec<c_uchar>)) -> Config {
         self.tag_keys = keys.0;
         self.tag_default = keys.1[0];
         self
@@ -166,35 +187,12 @@ impl Config {
         self
     }
 
-    pub fn get_description(&self, tag: c_uchar) -> Option<&'static str> {
-        for c in self.tag_description {
+    pub fn get_description(&self, tag: c_uchar) -> Option<&str> {
+        for c in self.tag_description.iter() {
             if c.0 == tag {
-                return Some(c.1);
+                return Some(&c.1);
             }
         }
         None
-    }
-}
-
-impl Default for Config {
-    fn default() -> Config {
-        Config {
-            add_keys: &[],
-            bar_height: BAR_HEIGHT,
-            border_width: BORDER_WIDTH,
-            focused_border_color: FOCUSED_BORDER_COLOR,
-            normal_border_color: NORMAL_BORDER_COLOR,
-            keys: KEYS,
-            overview_inset: OVERVIEW_INSET,
-            rules: &[],
-            start_programs: &[],
-            tags: TAG_KEYS.1,
-            tag_default: TAG_KEYS.1[0],
-            tag_description: &[],
-            tag_keys: TAG_KEYS.0,
-            tag_layout: Vec::new(),
-            window_expand_delta: WINDOW_EXPAND_DELTA,
-            window_move_delta: WINDOW_MOVE_DELTA,
-        }
     }
 }

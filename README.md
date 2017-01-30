@@ -53,7 +53,6 @@ in <tt>main.rs</tt>.
 I aim to provide the interface that you can assemble your window manager on your own. But currently it's working in
 progress and the functionality is limited. <tt>main.rs</tt> is what I'm using on my own machine. It's highly personally
 flavoured but could be a reference point for your configuration.See <tt>main.rs</tt> how you can modify / tweak it.
-Defaulting Mod key can be done in <tt>src/config.rs</tt>, which should be fixed in the future.
 
 
 ### Usage

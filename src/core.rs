@@ -1,6 +1,5 @@
 use std::cmp;
 use std::collections::HashMap;
-use std::io::Write;
 use std::mem::zeroed;
 use std::os::raw::{c_int, c_long, c_uchar, c_uint, c_ulong};
 use std::ptr::null;
@@ -154,7 +153,7 @@ impl WindowManager {
                                       wm.colors.normal_border_color)
         };
         // Add workspaces.
-        for tag in wm.config.tags {
+        for tag in wm.config.tags.iter() {
             let w = Workspace::new(config.clone(),
                                    wm.anchor_window,
                                    *tag,
@@ -230,9 +229,9 @@ impl WindowManager {
     }
 
     fn grab_keys(&mut self) {
-        let grab = |keys: &[(c_uint, c_uint, &Fn(&mut WindowManager))]| {
+        let grab = |keys: &[(c_uint, c_uint, WmAction)]| {
             let modifiers = vec![0, xlib::LockMask];
-            for &key in keys {
+            for key in keys.iter() {
                 unsafe {
                     let code = xlib::XKeysymToKeycode(self.display, key.1 as c_ulong);
                     for modifier in modifiers.iter() {
@@ -250,9 +249,9 @@ impl WindowManager {
         unsafe {
             xlib::XUngrabKey(self.display, xlib::AnyKey, xlib::AnyModifier, self.root);
         }
-        grab(self.config.keys);
-        grab(self.config.tag_keys);
-        grab(self.config.add_keys);
+        grab(self.config.keys.as_slice());
+        grab(self.config.tag_keys.as_slice());
+        grab(self.config.add_keys.as_slice());
     }
 
     fn update_client_list(&mut self) {
@@ -267,13 +266,13 @@ impl WindowManager {
             for c in v.iter_mut() {
                 unsafe {
                     xlib::XChangeProperty(self.display,
-                                      self.root,
-                                      atoms::net_client_list(),
-                                      xlib::XA_WINDOW,
-                                      32,
-                                      xlib::PropModeAppend,
-                                      &mut c.borrow_mut().window as *mut c_ulong as *mut c_uchar,
-                                      1);
+                                          self.root,
+                                          atoms::net_client_list(),
+                                          xlib::XA_WINDOW,
+                                          32,
+                                          xlib::PropModeAppend,
+                                          &mut c.window() as *mut c_ulong as *mut c_uchar,
+                                          1);
                 }
             }
         }
@@ -290,7 +289,7 @@ impl WindowManager {
             };
             if let Some(mut c) = current_client {
                 let workspace = self.workspaces.get_mut(&tag).unwrap();
-                c.borrow_mut().tag = tag;
+                c.set_tag(tag);
                 workspace.new_client(c, false);
             }
             self.select_tag(tag);
@@ -313,7 +312,7 @@ impl WindowManager {
             }
             self.current_tag = tag;
             for c in sticky_clients.iter_mut() {
-                c.borrow_mut().tag = tag;
+                c.set_tag(tag);
                 self.current_workspace_mut().new_client(c.clone(), true);
             }
         }
@@ -666,9 +665,9 @@ impl WindowManager {
                                       self.anchor_window,
                                       self.current_tag);
         client.update_title();
-        client.borrow_mut().tag = tag;
-        client.borrow_mut().set_size(xa.x, xa.y, xa.width, xa.height);
-        client.borrow_mut().save_window_size();
+        client.set_tag(tag);
+        client.set_size(xa.x, xa.y, xa.width, xa.height);
+        client.save_window_size();
         client.set_border_color(self.colors.normal_border_color,
                                 self.colors.focused_border_color);
         debug!("start to managing client: {}, window {}",
@@ -681,7 +680,7 @@ impl WindowManager {
                                   xlib::XA_WINDOW,
                                   32,
                                   xlib::PropModeAppend,
-                                  &mut client.borrow_mut().window as *mut c_ulong as *mut u8,
+                                  &client.window() as *const c_ulong as *const u8,
                                   1);
             let mut wc: xlib::XWindowChanges = zeroed();
             wc.border_width = self.config.border_width;
@@ -704,7 +703,7 @@ impl WindowManager {
             xlib::XMapWindow(self.display, window);
         }
 
-        for r in self.config.rules {
+        for r in self.config.rules.iter() {
             if r.0(&client) {
                 r.1(&mut client);
             }
@@ -851,13 +850,13 @@ impl WindowManager {
             self.set_focus(c.clone());
             self.current_workspace_mut().restack();
         }
-        if button_event.button == xlib::Button1 && button_event.state & MOD_MASK != 0 {
+        if button_event.button == xlib::Button1 && button_event.state & self.config.mod_key != 0 {
             if let Some(mut c) = self.current_workspace()
                 .get_client_by_window(button_event.window) {
                 self.move_mouse(&mut c);
             }
         }
-        if button_event.button == xlib::Button3 && button_event.state & MOD_MASK != 0 {
+        if button_event.button == xlib::Button3 && button_event.state & self.config.mod_key != 0 {
             if let Some(mut c) = self.current_workspace()
                 .get_client_by_window(button_event.window) {
                 self.resize_mouse(&mut c);
@@ -1001,17 +1000,17 @@ impl WindowManager {
         unsafe {
             let key_event = xlib::XKeyEvent::from(*event);
             let keysym = xlib::XKeycodeToKeysym(self.display, key_event.keycode as u8, 0);
-            for &key in self.config.keys {
+            for key in self.config.clone().keys.iter() {
                 if key.1 == keysym as c_uint && clean_mask(key_event.state) == key.0 {
                     key.2(self);
                 }
             }
-            for &key in self.config.tag_keys {
+            for key in self.config.clone().tag_keys.iter() {
                 if key.1 == keysym as c_uint && clean_mask(key_event.state) == key.0 {
                     key.2(self);
                 }
             }
-            for &key in self.config.add_keys {
+            for key in self.config.clone().add_keys.iter() {
                 if key.1 == keysym as c_uint && clean_mask(key_event.state) == key.0 {
                     key.2(self);
                 }
@@ -1091,7 +1090,7 @@ impl WindowManager {
 
     pub fn run(&mut self) {
         self.do_log();
-        for prog in self.config.start_programs {
+        for prog in self.config.start_programs.iter() {
             prog();
         }
         unsafe {

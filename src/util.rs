@@ -26,10 +26,13 @@ macro_rules! x_disable_error_unsafe {
 #[macro_export]
 macro_rules! define_tags (
     ( $modkey: expr, $mod_mask: expr, [$($x: expr), *]) => {
-        (&[
-            $(($modkey, $x as c_uint, &|w| w.select_tag($x as c_uchar)), )*
-            $(($modkey | $mod_mask, $x as c_uint, &|w| w.add_tag($x as c_uchar)),)*
-        ], &[$($x as c_uchar, )*])
+        {
+            let tag_keys: Vec<(c_uint, c_uint, WmAction)> = vec![
+                $(($modkey, $x as c_uint, Box::new(|w| w.select_tag($x as c_uchar))), )*
+                $(($modkey | $mod_mask, $x as c_uint, Box::new(|w| w.add_tag($x as c_uchar))),)*
+            ];
+            (tag_keys, vec![$($x as c_uchar, )*])
+        }
     };
 );
 
