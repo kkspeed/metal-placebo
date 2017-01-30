@@ -1,7 +1,6 @@
 use std::cell::{Ref, RefCell, RefMut};
 use std::collections::HashMap;
 use std::ffi::CString;
-use std::io::Write;
 use std::os::raw::{c_long, c_int, c_uchar, c_uint, c_ulong, c_void};
 use std::mem::{size_of, zeroed};
 use std::ptr::{null, null_mut};
@@ -11,7 +10,6 @@ use std::slice;
 use x11::xlib;
 
 use atoms;
-use config;
 use config::Config;
 use util;
 
@@ -63,8 +61,8 @@ impl Rect {
 pub struct Client {
     anchor_window: xlib::Window,
     config: Rc<Config>,
-    pub tag: c_uchar,
-    pub title: Rc<String>,
+    tag: c_uchar,
+    title: Rc<String>,
     root: xlib::Window,
     class: Rc<String>,
     was_floating: bool,
@@ -77,13 +75,13 @@ pub struct Client {
     is_above: bool,
     normal_border_color: c_ulong,
     focused_border_color: c_ulong,
-    pub display: *mut xlib::Display,
-    pub window: c_ulong,
-    pub old_rect: Rect,
-    pub rect: Rect,
-    pub border: c_int,
-    pub old_border: c_int,
-    pub weight: i32,
+    display: *mut xlib::Display,
+    window: c_ulong,
+    old_rect: Rect,
+    rect: Rect,
+    border: c_int,
+    old_border: c_int,
+    weight: i32,
     extras: HashMap<String, Rc<String>>,
 }
 
@@ -130,22 +128,6 @@ impl Client {
             }
         }
         client
-    }
-
-    pub fn save_window_size(&mut self) {
-        self.old_rect = self.rect.clone();
-        debug!("save window {:x} size: old rect: {:?}",
-               self.window,
-               self.old_rect);
-    }
-
-    pub fn set_size(&mut self, x: c_int, y: c_int, width: c_int, height: c_int) {
-        self.rect = Rect {
-            x: x,
-            y: y,
-            width: width,
-            height: height,
-        };
     }
 }
 
@@ -327,8 +309,13 @@ impl ClientW {
     pub fn display(&self) -> *mut xlib::Display {
         self.borrow().display
     }
+
     pub fn tag(&self) -> c_uchar {
         self.borrow().tag
+    }
+
+    pub fn set_tag(&mut self, tag: c_uchar) {
+        self.borrow_mut().tag = tag;
     }
 
     pub fn window(&self) -> c_ulong {
@@ -351,7 +338,7 @@ impl ClientW {
 
     pub fn move_window(&mut self, x: c_int, y: c_int, save: bool) {
         if save {
-            self.borrow_mut().save_window_size();
+            self.save_window_size();
             self.borrow_mut().rect.x = x;
             self.borrow_mut().rect.y = y;
         }
@@ -372,8 +359,8 @@ impl ClientW {
 
     pub fn resize(&mut self, rect: Rect, temporary: bool) {
         if !temporary {
-            self.borrow_mut().save_window_size();
-            self.borrow_mut().set_size(rect.x, rect.y, rect.width, rect.height);
+            self.save_window_size();
+            self.set_size(rect.x, rect.y, rect.width, rect.height);
         }
         let mut xc: xlib::XWindowChanges = unsafe { zeroed() };
         xc.x = rect.x;
@@ -494,7 +481,7 @@ impl ClientW {
             } else {
                 xlib::XGrabButton(self.display(),
                                   xlib::AnyButton as c_uint,
-                                  config::MOD_MASK,
+                                  self.borrow().config.mod_key,
                                   self.window(),
                                   0,
                                   (xlib::ButtonPressMask | xlib::ButtonReleaseMask) as c_uint,
@@ -533,6 +520,23 @@ impl ClientW {
                                        self.borrow().normal_border_color);
             }
         }
+    }
+
+    pub fn set_size(&mut self, x: c_int, y: c_int, width: c_int, height: c_int) {
+        self.borrow_mut().rect = Rect {
+            x: x,
+            y: y,
+            width: width,
+            height: height,
+        };
+    }
+
+    pub fn save_window_size(&mut self) {
+        let rect = self.borrow().rect.clone();
+        self.borrow_mut().old_rect = rect;
+        debug!("save window {:x} size: old rect: {:?}",
+               self.borrow().window,
+               self.borrow().old_rect);
     }
 }
 

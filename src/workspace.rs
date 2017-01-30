@@ -126,7 +126,7 @@ impl Workspace {
             if !client.send_event(atom) {
                 x_disable_error_unsafe!(client.display(), {
                     xlib::XSetCloseDownMode(client.display(), xlib::DestroyAll);
-                    xlib::XKillClient(client.display(), client.borrow().window);
+                    xlib::XKillClient(client.display(), client.window());
                 });
             }
         });
