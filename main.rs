@@ -76,7 +76,8 @@ fn main() {
              (MOD_MASK, keysym::XK_i, Box::new(|w| w.set_focus_index(Some(2)))),
              (MOD_MASK, keysym::XK_o, Box::new(|w| w.set_focus_index(Some(3)))),
              (MOD_MASK, keysym::XK_p, Box::new(|w| w.set_focus_index(None))),
-             (MOD_MASK, keysym::XK_Tab, Box::new(|w| w.toggle_back()))];
+             (MOD_MASK, keysym::XK_Tab, Box::new(|w| w.toggle_back())),
+             (MOD_MASK, keysym::XK_s, Box::new(toggle_sticky))];
 
     let start_programs: Vec<StartAction> =
         vec![Box::new(|| spawn("xcompmgr", &[])),
@@ -124,4 +125,13 @@ fn main() {
     let mut window_manager = core::WindowManager::new(config);
     window_manager.set_logger(Box::new(xmobar_logger));
     window_manager.run();
+}
+
+fn toggle_sticky(w: &mut core::WindowManager) {
+    if let Some(c) = w.current_focused() {
+        let sticky = c.is_sticky();
+        c.clone().set_sticky(!sticky);
+        c.clone().set_floating(!sticky);
+        w.arrange_windows();
+    }
 }

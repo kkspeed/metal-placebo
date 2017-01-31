@@ -753,7 +753,7 @@ impl WindowManager {
                          current_focused);
     }
 
-    fn arrange_windows(&mut self) {
+    pub fn arrange_windows(&mut self) {
         for (_, mut w) in self.workspaces.iter_mut() {
             let tag = w.tag;
             if tag == TAG_OVERVIEW {

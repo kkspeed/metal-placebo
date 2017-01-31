@@ -100,6 +100,7 @@ To enjoy full functionality, you should install the corresponding packages.
 | Mod4 + O           | focus the 4th client in current workspace                        |
 | Mod4 + P           | focus the last client in current workspace                       |
 | Mod4 + Tab         | alters between 2 recent workspaces                               |
+| Mod4 + S           | toggles sticky(show in all workspace) windows                    |
 
 For more information, see <tt>KEYS</tt> constant in <tt>main.rs</tt> and <tt>config.rs</tt> for the list of combination keys
 and functionality.
