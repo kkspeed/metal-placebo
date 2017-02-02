@@ -79,6 +79,10 @@ pub struct Client {
     window: c_ulong,
     old_rect: Rect,
     rect: Rect,
+    base_width: c_int,
+    base_height: c_int,
+    width_inc: c_int,
+    height_inc: c_int,
     border: c_int,
     old_border: c_int,
     weight: i32,
@@ -111,6 +115,10 @@ impl Client {
             is_fullscreen: false,
             is_dock: false,
             is_above: false,
+            base_width: 0,
+            base_height: 0,
+            width_inc: 1,
+            height_inc: 1,
             focused_border_color: 0,
             normal_border_color: 0,
             old_rect: Rect::default(),
@@ -351,10 +359,8 @@ impl ClientW {
         // TODO: This is a very ugly solution to invalidate the window that requires
         // resize to repaint, especially gtk 2 windows: emacs, lxterminal etc.
         let mut rect = self.get_rect();
-        rect.width = rect.width + 1;
-        self.resize(rect.clone(), true);
-        rect.width = rect.width - 1;
-        self.resize(rect, true);
+        self.move_window(-10 * rect.width, rect.y, false);
+        self.move_window(rect.x, rect.y, false);
     }
 
     pub fn resize(&mut self, rect: Rect, temporary: bool) {
@@ -523,12 +529,16 @@ impl ClientW {
     }
 
     pub fn set_size(&mut self, x: c_int, y: c_int, width: c_int, height: c_int) {
-        self.borrow_mut().rect = Rect {
+        let new_width = -(width - self.borrow().base_width) % self.borrow().width_inc + width;
+        let new_height = -(height - self.borrow().base_height) % self.borrow().height_inc + height;
+        debug!("setting size to: {}, {} instead of {}, {}", new_width, new_height, width, height);
+        let rect = Rect {
             x: x,
             y: y,
-            width: width,
-            height: height,
+            width: new_width,
+            height: new_height,
         };
+        self.borrow_mut().rect = rect;
     }
 
     pub fn save_window_size(&mut self) {
@@ -537,6 +547,24 @@ impl ClientW {
         debug!("save window {:x} size: old rect: {:?}",
                self.borrow().window,
                self.borrow().old_rect);
+    }
+
+    pub fn update_size_hints(&mut self) {
+        let mut msize: c_long = 0;
+        let mut size: xlib::XSizeHints = unsafe { zeroed() };
+
+        if unsafe { xlib::XGetWMNormalHints(self.display(), self.window(), &mut size, &mut msize) } == 0 {
+            size.flags = xlib::PSize;
+        }
+        if size.flags & xlib::PBaseSize != 0 {
+            self.borrow_mut().base_width = size.base_width;
+            self.borrow_mut().base_height = size.base_height;
+        }
+        if size.flags & xlib::PResizeInc != 0 {
+            self.borrow_mut().width_inc = size.width_inc;
+            self.borrow_mut().height_inc = size.height_inc;
+            debug!("updating hint: width_inc {}, height_inc {}", size.width_inc, size.height_inc);
+        }
     }
 }
 

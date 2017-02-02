@@ -666,6 +666,7 @@ impl WindowManager {
                                       self.current_tag);
         client.update_title();
         client.set_tag(tag);
+        client.update_size_hints();
         client.set_size(xa.x, xa.y, xa.width, xa.height);
         client.save_window_size();
         client.set_border_color(self.colors.normal_border_color,
@@ -1061,8 +1062,9 @@ impl WindowManager {
                     let tag = c.tag();
                     // ignore size hint for overview since the window sizes are
                     // temporary.
-                    c.invalidate();
-                    c.show(tag == self.current_tag);
+                    c.update_size_hints();
+                    //                    c.invalidate();
+                    // c.show(tag == self.current_tag);
                 }
             } else if property_event.atom == atoms::net_wm_window_type() {
                 self.update_window_type(c.clone());
