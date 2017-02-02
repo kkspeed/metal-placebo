@@ -334,7 +334,7 @@ impl ClientW {
         let rect = self.get_rect();
         if visible {
             self.move_window(rect.x, rect.y, false);
-            self.invalidate();
+            // self.invalidate();
         } else {
             self.move_window(-10 * rect.width, rect.y, false);
         }
@@ -388,6 +388,7 @@ impl ClientW {
         let rect = self.get_rect();
         ce.type_ = xlib::ConfigureNotify;
         ce.display = self.display();
+        ce.window = self.window();
         ce.event = self.window();
         ce.x = rect.x;
         ce.y = rect.y;
