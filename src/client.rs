@@ -358,8 +358,8 @@ impl ClientW {
     pub fn invalidate(&mut self) {
         // TODO: This is a very ugly solution to invalidate the window that requires
         // resize to repaint, especially gtk 2 windows: emacs, lxterminal etc.
-        let mut rect = self.get_rect();
-        self.move_window(-10 * rect.width, rect.y, false);
+        let rect = self.get_rect();
+        self.move_window(rect.x - 1, rect.y, false);
         self.move_window(rect.x, rect.y, false);
     }
 
@@ -531,7 +531,11 @@ impl ClientW {
     pub fn set_size(&mut self, x: c_int, y: c_int, width: c_int, height: c_int) {
         let new_width = -(width - self.borrow().base_width) % self.borrow().width_inc + width;
         let new_height = -(height - self.borrow().base_height) % self.borrow().height_inc + height;
-        debug!("setting size to: {}, {} instead of {}, {}", new_width, new_height, width, height);
+        debug!("setting size to: {}, {} instead of {}, {}",
+               new_width,
+               new_height,
+               width,
+               height);
         let rect = Rect {
             x: x,
             y: y,
@@ -553,7 +557,9 @@ impl ClientW {
         let mut msize: c_long = 0;
         let mut size: xlib::XSizeHints = unsafe { zeroed() };
 
-        if unsafe { xlib::XGetWMNormalHints(self.display(), self.window(), &mut size, &mut msize) } == 0 {
+        if unsafe {
+            xlib::XGetWMNormalHints(self.display(), self.window(), &mut size, &mut msize)
+        } == 0 {
             size.flags = xlib::PSize;
         }
         if size.flags & xlib::PBaseSize != 0 {
@@ -563,7 +569,9 @@ impl ClientW {
         if size.flags & xlib::PResizeInc != 0 {
             self.borrow_mut().width_inc = size.width_inc;
             self.borrow_mut().height_inc = size.height_inc;
-            debug!("updating hint: width_inc {}, height_inc {}", size.width_inc, size.height_inc);
+            debug!("updating hint: width_inc {}, height_inc {}",
+                   size.width_inc,
+                   size.height_inc);
         }
     }
 }
