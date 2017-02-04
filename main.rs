@@ -11,6 +11,7 @@ use x11::{keysym, xlib};
 use rswm::client::ClientW;
 use rswm::config::*;
 use rswm::core;
+use rswm::core::XWindowManager;
 use rswm::extra;
 use rswm::loggers;
 use rswm::layout::{Tile, Tile13, FullScreen, Overview, Layout};
