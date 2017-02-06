@@ -33,9 +33,8 @@ The first N tags are associated with the first N screens. The rest tags are pile
 Currently the focus management for multiple screens is not ideal:
 - Each workspace shows 1 highlighted window
 - Clicking on the highlighted window does not result in a focus switch to the screen
-- Moving windows out of the workspace to another screen does not result in an arrange window
 - Dynamic adding / removing screens may not be supported
-- Resolution changes may not work
+- Resolution changes do not work
 - Only the first screen has a bar. All the screen spaces in other screens will be used for windows
 
 ## Installation
