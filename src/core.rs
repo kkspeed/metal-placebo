@@ -124,6 +124,7 @@ impl WindowManager {
         let root = unsafe { xlib::XRootWindow(display, screen) };
         let width = unsafe { xlib::XDisplayWidth(display, screen) };
         let height = unsafe { xlib::XDisplayHeight(display, screen) };
+        let screen_rects = util::get_screen_rects(display);
         atoms::create_atoms(display);
         let mut wm = WindowManager {
             config: config.clone(),
@@ -153,13 +154,18 @@ impl WindowManager {
                                       wm.colors.normal_border_color)
         };
         // Add workspaces.
-        for tag in wm.config.tags.iter() {
+        for i in 0..wm.config.tags.len() {
+            let tag = wm.config.tags[i];
+            let current_rect = screen_rects.get(i);
+            let last_rect = screen_rects.len() - 1;
             let w = Workspace::new(config.clone(),
                                    wm.anchor_window,
-                                   *tag,
-                                   config.get_description(*tag).map(|c| c.into()),
-                                   lookup_layout(config.clone(), *tag));
-            wm.workspaces.insert(*tag, w);
+                                   tag,
+                                   config.get_description(tag).map(|c| c.into()),
+                                   lookup_layout(config.clone(), tag),
+                                   current_rect.map(|r| r.clone())
+                                       .unwrap_or(screen_rects[last_rect].clone()));
+            wm.workspaces.insert(tag, w);
         }
 
         wm.workspaces.insert(TAG_OVERVIEW,
@@ -167,7 +173,8 @@ impl WindowManager {
                                             wm.anchor_window,
                                             TAG_OVERVIEW,
                                             None,
-                                            lookup_layout(config.clone(), TAG_OVERVIEW)));
+                                            lookup_layout(config.clone(), TAG_OVERVIEW),
+                                            screen_rects[0].clone()));
 
         let net_atom_list = vec![atoms::net_active_window(),
                                  atoms::net_client_list(),
@@ -365,8 +372,10 @@ impl WindowManager {
     }
 
     pub fn set_fullscreen(&mut self, client: ClientW, fullscreen: bool) {
-        client.clone().set_fullscreen(Rect::new(0, 0, self.screen_width, self.screen_height),
-                                      fullscreen);
+        {
+            let workspace = self.workspaces.get(&client.tag()).unwrap();
+            client.clone().set_fullscreen(workspace.rect.clone(), fullscreen);
+        }
         if !fullscreen {
             self.arrange_windows();
         }
@@ -386,6 +395,8 @@ impl WindowManager {
 
     pub fn set_focus(&mut self, client: ClientW) {
         {
+            debug!("selecting tag: {}", client.tag() as char);
+            self.select_tag(client.tag());
             let workspace = self.current_workspace_mut();
             workspace.set_focus(client.clone());
             workspace.restack();
@@ -419,20 +430,21 @@ impl WindowManager {
             if !client.is_floating() {
                 return;
             }
+            let screen_rect = self.current_workspace().rect.clone();
             let rect = client.get_rect();
             let mut target_x = rect.x + delta_x;
             let mut target_y = rect.y + delta_y;
-            if target_x < 0 {
-                target_x = 0;
+            if target_x < screen_rect.x {
+                target_x = screen_rect.x;
             }
-            if target_x > self.screen_width - rect.width {
-                target_x = self.screen_width - rect.width;
+            if target_x > screen_rect.width - rect.width {
+                target_x = screen_rect.width - rect.width;
             }
-            if target_y < 0 {
-                target_y = 0;
+            if target_y < screen_rect.y {
+                target_y = screen_rect.y;
             }
-            if target_y > self.screen_height - rect.height {
-                target_y = self.screen_height - rect.height;
+            if target_y > screen_rect.height - rect.height {
+                target_y = screen_rect.height - rect.height;
             }
             client.move_window(target_x, target_y, true);
             unsafe {
@@ -446,11 +458,12 @@ impl WindowManager {
             if !client.is_floating() {
                 return;
             }
+            let screen_rect = self.current_workspace().rect.clone();
             let mut rect = client.get_rect();
             rect.width = delta + rect.width;
 
-            if rect.width > self.screen_width {
-                rect.width = self.screen_width;
+            if rect.width > screen_rect.width {
+                rect.width = screen_rect.width;
             }
             if rect.width < 10 {
                 return;
@@ -464,11 +477,12 @@ impl WindowManager {
             if !client.is_floating() {
                 return;
             }
+            let screen_rect = self.current_workspace().rect.clone();
             let mut rect = client.get_rect();
             rect.height = delta + rect.height;
 
-            if rect.height > self.screen_height {
-                rect.height = self.screen_height;
+            if rect.height > screen_rect.height {
+                rect.height = screen_rect.height;
             }
 
             if rect.height < 10 {
@@ -755,12 +769,14 @@ impl WindowManager {
     }
 
     pub fn arrange_windows(&mut self) {
+        let screen_rect = self.current_workspace().rect.clone();
         for (_, mut w) in self.workspaces.iter_mut() {
             let tag = w.tag;
             if tag == TAG_OVERVIEW {
                 continue;
             }
-            if tag != self.current_tag && self.current_tag != TAG_OVERVIEW {
+            if tag != self.current_tag && self.current_tag != TAG_OVERVIEW &&
+               screen_rect.x == w.rect.x && screen_rect.y == w.rect.y {
                 w.show(false);
             }
         }
@@ -778,12 +794,13 @@ impl WindowManager {
             }
         }
 
-        // TODO: Handle sticky windows as well
+        // TODO: 1) Handle sticky windows as well
+        //       2) Handle other multiple screen layout
         let strategy = self.current_workspace()
-            .get_layout(Rect::new(0,
+            .get_layout(Rect::new(screen_rect.x,
                                   self.config.bar_height,
-                                  self.screen_width - 2 * self.config.border_width,
-                                  self.screen_height - self.config.bar_height -
+                                  screen_rect.width - 2 * self.config.border_width,
+                                  screen_rect.height - self.config.bar_height -
                                   2 * self.config.border_width));
         for (mut c, r) in strategy {
             if self.current_tag == TAG_OVERVIEW {
@@ -791,10 +808,10 @@ impl WindowManager {
                 continue;
             }
             let target_rect = if c.is_maximized() {
-                Rect::new(0,
+                Rect::new(screen_rect.x,
                           self.config.bar_height,
-                          self.screen_width - 2 * self.config.border_width,
-                          self.screen_height - self.config.bar_height -
+                          screen_rect.width - 2 * self.config.border_width,
+                          screen_rect.height - self.config.bar_height -
                           2 * self.config.border_width)
             } else {
                 r
@@ -959,6 +976,7 @@ impl WindowManager {
     }
 
     fn on_configure_notify(&mut self, event: &xlib::XEvent) {
+        // TODO: revisit for multiple monitor.
         let ce: xlib::XConfigureEvent = xlib::XConfigureEvent::from(*event);
         if ce.window == self.root &&
            (ce.width != self.screen_width || ce.height != self.screen_height) {

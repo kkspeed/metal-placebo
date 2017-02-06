@@ -25,6 +25,7 @@ pub struct Workspace {
     clients_next: VecDeque<ClientW>,
     description: Option<String>,
     layout: Box<Layout + 'static>,
+    pub rect: Rect,
     pub tag: c_uchar,
 }
 
@@ -33,7 +34,8 @@ impl Workspace {
                anchor_window: xlib::Window,
                tag: c_uchar,
                description: Option<String>,
-               layout: Box<Layout + 'static>)
+               layout: Box<Layout + 'static>,
+               rect: Rect)
                -> Self {
         Workspace {
             anchor_window: anchor_window,
@@ -43,6 +45,7 @@ impl Workspace {
             description: description,
             config: config,
             layout: layout,
+            rect: rect,
             tag: tag,
         }
     }

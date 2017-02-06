@@ -9,8 +9,8 @@ libc = "*"
 mustache = "*"
 
 [dependencies.x11]
-version = "*"
-features = ["xlib", "xinput"]
+version = "2.12.0"
+features = ["xlib", "xinput", "xinerama"]
 
 [[bin]]
 name = "rswm"

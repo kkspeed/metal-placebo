@@ -1,9 +1,12 @@
 use std::ffi::CString;
-use std::os::raw::{c_char, c_int, c_uint};
+use std::os::raw::{c_char, c_int, c_uint, c_void};
 use std::mem::zeroed;
 use std::process;
+use std::slice;
 
 use x11::xlib;
+use x11::xinerama;
+use client::Rect;
 
 use xproto;
 
@@ -121,6 +124,36 @@ pub fn truncate(s: &str, max_chars: usize) -> &str {
         None => s,
         Some((idx, _)) => &s[..idx],
     }
+}
+
+pub fn get_screen_rects(display: *mut xlib::Display) -> Vec<Rect> {
+    let screen = unsafe { xlib::XDefaultScreen(display) };
+    let mut result = Vec::new();
+    let mut number: c_int = 0;
+    let info: *mut xinerama::XineramaScreenInfo =
+        unsafe { xinerama::XineramaQueryScreens(display, &mut number) };
+    if !info.is_null() {
+        let info_array: &[xinerama::XineramaScreenInfo] =
+            unsafe { slice::from_raw_parts(info, number as usize) };
+        for i in info_array {
+            result.push(Rect::new(i.x_org as c_int,
+                                  i.y_org as c_int,
+                                  i.width as c_int,
+                                  i.height as c_int));
+        }
+        unsafe {
+            xlib::XFree(info as *mut c_void);
+        }
+    } else {
+        let rect = unsafe {
+            Rect::new(0,
+                      0,
+                      xlib::XDisplayWidth(display, screen),
+                      xlib::XDisplayHeight(display, screen))
+        };
+        result.push(rect);
+    }
+    result
 }
 
 #[allow(unused_variables)]
