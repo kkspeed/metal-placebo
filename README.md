@@ -23,6 +23,14 @@ scope.
 
 ![Navigation](https://raw.githubusercontent.com/kkspeed/metal-placebo/master/images/navigate.png)
 
+### Experimental Multiscreen Support
+Multiple screen support is an experimental feature. Currently the focus management for multiple screens
+is not ideal.
+
+![Multiscreen](https://raw.githubusercontent.com/kkspeed/metal-placebo/master/images/multiscreen.png)
+
+The first N tags are associated with the first N screens. The rest tags are piled on the last screen.
+
 ## Installation
 ### Building and Running
 Simply clone the repo and run
@@ -123,6 +131,6 @@ This window manager is absolutely in its infancy, meaning it could crash, could 
 desktop. USE IT AT YOUR OWN RISK!
 
 In the future, I plan to:
-- Add multi-screen support.
+- Better multi-screen support.
 - Clean up configuration process.
 - Introduce more intuitive and cleaner logging.

@@ -17,7 +17,7 @@ use rswm::loggers;
 use rswm::layout::{Tile, Tile13, FullScreen, Overview, Layout};
 use rswm::util::spawn;
 
-const MOD_MASK: c_uint = xlib::Mod1Mask;
+const MOD_MASK: c_uint = xlib::Mod4Mask;
 
 fn init_logging(filter: log::LogLevelFilter) {
     use log4rs::append::file::FileAppender;
@@ -102,7 +102,7 @@ fn main() {
 
     let config = Config::new(MOD_MASK)
         .border_width(2)
-        .bar_height(31)
+        .bar_height(18)
         .addtional_keys(keys)
         .start_programs(start_programs)
         .tag_keys(define_tags!(MOD_MASK,
