@@ -271,8 +271,19 @@ impl WindowManager {
 
     pub fn add_tag(&mut self, tag: c_uchar) {
         if self.current_tag != TAG_OVERVIEW {
+            if self.current_tag == tag {
+                return;
+            }
+
             let current_client = {
-                self.current_workspace_mut().detach_current()
+                let next_workspace_x = self.workspaces.get(&tag).unwrap().rect.x;
+                let workspace = self.current_workspace_mut();
+                let current_client = workspace.detach_current();
+
+                if next_workspace_x != workspace.rect.x {
+                    workspace.arrange();
+                }
+                current_client
             };
             if let Some(mut c) = current_client {
                 let workspace = self.workspaces.get_mut(&tag).unwrap();
@@ -775,51 +786,7 @@ impl WindowManager {
             }
         }
 
-        let bar_height = if screen_rect.x == 0 {
-            self.config.bar_height
-        } else {
-            screen_rect.y
-        };
-
-        // TODO: 1) Handle sticky windows as well
-        //       2) Handle other multiple screen layout
-        let strategy = self.current_workspace()
-            .get_layout(Rect::new(screen_rect.x,
-                                  bar_height,
-                                  screen_rect.width - 2 * self.config.border_width,
-                                  screen_rect.height - bar_height - 2 * self.config.border_width));
-        for (mut c, r) in strategy {
-            if self.current_tag == TAG_OVERVIEW {
-                c.resize(r, true);
-                continue;
-            }
-            let target_rect = if c.is_maximized() {
-                Rect::new(screen_rect.x,
-                          bar_height,
-                          screen_rect.width - 2 * self.config.border_width,
-                          screen_rect.height - bar_height - 2 * self.config.border_width)
-            } else {
-                r
-            };
-            c.resize(target_rect, false);
-        }
-
-        if self.current_tag != TAG_OVERVIEW {
-            let mut floating_clients = self.current_workspace_mut()
-                .select_clients(&|c| c.is_floating() == true);
-            for fc in floating_clients.iter_mut() {
-                let rect = fc.get_rect();
-                fc.resize(rect, false);
-                fc.raise_window();
-            }
-        }
-
-        for c in self.current_clients() {
-            if c.is_fullscreen() {
-                c.raise_window();
-            }
-        }
-
+        self.current_workspace_mut().arrange();
         self.current_workspace_mut().restack();
     }
 

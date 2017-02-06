@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use atoms;
 use client::{ClientW, Rect};
-use config::Config;
+use config::{Config, TAG_OVERVIEW};
 use layout::Layout;
 use util;
 
@@ -274,6 +274,52 @@ impl Workspace {
 
     pub fn zoom(&mut self) {
         self.detach_current().map(|c| self.new_client(c, false));
+    }
+
+    pub fn arrange(&mut self) {
+        let bar_height = if self.rect.x == 0 {
+            self.config.bar_height
+        } else {
+            self.rect.y
+        };
+
+        // TODO: 1) Handle sticky windows as well
+        //       2) Handle other multiple screen layout
+        let strategy = self.get_layout(Rect::new(self.rect.x,
+                                                 bar_height,
+                                                 self.rect.width - 2 * self.config.border_width,
+                                                 self.rect.height - bar_height -
+                                                 2 * self.config.border_width));
+        for (mut c, r) in strategy {
+            if self.tag == TAG_OVERVIEW {
+                c.resize(r, true);
+                continue;
+            }
+            let target_rect = if c.is_maximized() {
+                Rect::new(self.rect.x,
+                          bar_height,
+                          self.rect.width - 2 * self.config.border_width,
+                          self.rect.height - bar_height - 2 * self.config.border_width)
+            } else {
+                r
+            };
+            c.resize(target_rect, false);
+        }
+
+        if self.tag != TAG_OVERVIEW {
+            let mut floating_clients = self.select_clients(&|c| c.is_floating() == true);
+            for fc in floating_clients.iter_mut() {
+                let rect = fc.get_rect();
+                fc.resize(rect, false);
+                fc.raise_window();
+            }
+        }
+
+        for c in self.iter_mut() {
+            if c.is_fullscreen() {
+                c.raise_window();
+            }
+        }
     }
 
     pub fn iter(&self) -> WSIter {
