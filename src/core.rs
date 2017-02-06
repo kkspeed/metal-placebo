@@ -775,14 +775,19 @@ impl WindowManager {
             }
         }
 
+        let bar_height = if screen_rect.x == 0 {
+            self.config.bar_height
+        } else {
+            screen_rect.y
+        };
+
         // TODO: 1) Handle sticky windows as well
         //       2) Handle other multiple screen layout
         let strategy = self.current_workspace()
             .get_layout(Rect::new(screen_rect.x,
-                                  self.config.bar_height,
+                                  bar_height,
                                   screen_rect.width - 2 * self.config.border_width,
-                                  screen_rect.height - self.config.bar_height -
-                                  2 * self.config.border_width));
+                                  screen_rect.height - bar_height - 2 * self.config.border_width));
         for (mut c, r) in strategy {
             if self.current_tag == TAG_OVERVIEW {
                 c.resize(r, true);
@@ -790,10 +795,9 @@ impl WindowManager {
             }
             let target_rect = if c.is_maximized() {
                 Rect::new(screen_rect.x,
-                          self.config.bar_height,
+                          bar_height,
                           screen_rect.width - 2 * self.config.border_width,
-                          screen_rect.height - self.config.bar_height -
-                          2 * self.config.border_width)
+                          screen_rect.height - bar_height - 2 * self.config.border_width)
             } else {
                 r
             };
