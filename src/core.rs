@@ -386,8 +386,10 @@ impl WindowManager {
 
     pub fn set_focus(&mut self, client: ClientW) {
         {
-            debug!("selecting tag: {}", client.tag() as char);
-            self.select_tag(client.tag());
+            if self.current_tag != TAG_OVERVIEW {
+                debug!("selecting tag: {}", client.tag() as char);
+                self.select_tag(client.tag());
+            }
             let workspace = self.current_workspace_mut();
             workspace.set_focus(client.clone());
             workspace.restack();
@@ -962,7 +964,11 @@ impl XWindowManager for WindowManager {
     }
 
     fn on_enter_notify(&mut self, event: xlib::XEnterWindowEvent) {
-        debug!("[on_enter_notify]: not implemented!");
+        if let Some(c) = self.get_client_by_window(event.window) {
+            if c.tag() != self.current_tag && self.current_tag != TAG_OVERVIEW {
+                self.select_tag(c.tag());
+            }
+        }
     }
 
     fn on_expose_notify(&mut self, event: xlib::XExposeEvent) {
