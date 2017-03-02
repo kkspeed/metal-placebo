@@ -353,11 +353,10 @@ impl<'a> Iterator for WSIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(next_client) = self.prev_iter.next() {
             Some(next_client)
-        } else if !self.current_returned && self.current_client.is_some() {
-            self.current_returned = true;
-            self.current_client.take()
+        } else if let Some(next_client) = self.next_iter.next() {
+            Some(next_client)
         } else {
-            self.next_iter.next()
+            self.current_client.take()
         }
     }
 }
@@ -374,11 +373,11 @@ impl<'a> Iterator for WSIterMut<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(next_client) = self.prev_iter.next() {
             Some(next_client)
-        } else if !self.current_returned && self.current_client.is_some() {
+        } else if let Some(next_client) = self.next_iter.next() {
+            Some(next_client)
+        } else {
             self.current_returned = true;
             self.current_client.take()
-        } else {
-            self.next_iter.next()
         }
     }
 }
