@@ -81,8 +81,7 @@ fn main() {
              (MOD_MASK, keysym::XK_s, Box::new(toggle_sticky))];
 
     let start_programs: Vec<StartAction> =
-        vec![Box::new(|| spawn("xcompmgr", &[])),
-             Box::new(|| spawn("fcitx", &[])),
+        vec![Box::new(|| spawn("fcitx", &[])),
              Box::new(|| spawn("tilda", &["--hidden"])),
              Box::new(|| spawn("/usr/lib/polkit-kde/polkit-kde-authentication-agent-1", &[]))];
 
@@ -102,7 +101,7 @@ fn main() {
 
     let config = Config::new(MOD_MASK)
         .border_width(2)
-        .bar_height(18)
+        .bar_height(31)
         .addtional_keys(keys)
         .start_programs(start_programs)
         .tag_keys(define_tags!(MOD_MASK,

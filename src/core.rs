@@ -50,11 +50,13 @@ impl Colors {
             let mut color_def_exact: xlib::XColor = zeroed();
             let visual = xlib::XDefaultVisual(display, 0);
             let color_map = xlib::XCreateColormap(display, window, visual, xlib::AllocNone);
-            xlib::XAllocNamedColor(display,
-                                   color_map,
-                                   name.as_ptr() as *const i8,
-                                   &mut color_def_screen,
-                                   &mut color_def_exact);
+            xlib::XAllocNamedColor(
+                display,
+                color_map,
+                name.as_ptr() as *const i8,
+                &mut color_def_screen,
+                &mut color_def_exact,
+            );
             color_def_screen
         }
     }
@@ -83,7 +85,9 @@ impl BackStack {
     }
 
     fn push(&mut self, client: ClientW) {
-        let position = self.stack.iter().position(|c| c.window() == client.window());
+        let position = self.stack.iter().position(
+            |c| c.window() == client.window(),
+        );
         let c = if let Some(index) = position {
             self.stack.remove(index)
         } else {
@@ -93,7 +97,9 @@ impl BackStack {
     }
 
     fn remove(&mut self, client: ClientW) {
-        let position = self.stack.iter().position(|c| c.window() == client.window());
+        let position = self.stack.iter().position(
+            |c| c.window() == client.window(),
+        );
         if let Some(index) = position {
             self.stack.remove(index);
         }
@@ -143,72 +149,88 @@ impl WindowManager {
         };
 
         wm.anchor_window = unsafe {
-            xlib::XCreateSimpleWindow(wm.display,
-                                      wm.root,
-                                      0,
-                                      0,
-                                      1,
-                                      1,
-                                      0,
-                                      wm.colors.normal_border_color,
-                                      wm.colors.normal_border_color)
+            xlib::XCreateSimpleWindow(
+                wm.display,
+                wm.root,
+                0,
+                0,
+                1,
+                1,
+                0,
+                wm.colors.normal_border_color,
+                wm.colors.normal_border_color,
+            )
         };
         // Add workspaces.
         for i in 0..wm.config.tags.len() {
             let tag = wm.config.tags[i];
             let current_rect = screen_rects.get(i);
             let last_rect = screen_rects.len() - 1;
-            let w = Workspace::new(config.clone(),
-                                   wm.anchor_window,
-                                   tag,
-                                   config.get_description(tag).map(|c| c.into()),
-                                   lookup_layout(config.clone(), tag),
-                                   current_rect.map(|r| r.clone())
-                                       .unwrap_or(screen_rects[last_rect].clone()));
+            let w = Workspace::new(
+                config.clone(),
+                wm.anchor_window,
+                tag,
+                config.get_description(tag).map(|c| c.into()),
+                lookup_layout(config.clone(), tag),
+                current_rect.map(|r| r.clone()).unwrap_or(
+                    screen_rects[last_rect]
+                        .clone(),
+                ),
+            );
             wm.workspaces.insert(tag, w);
         }
 
-        wm.workspaces.insert(TAG_OVERVIEW,
-                             Workspace::new(config.clone(),
-                                            wm.anchor_window,
-                                            TAG_OVERVIEW,
-                                            None,
-                                            lookup_layout(config.clone(), TAG_OVERVIEW),
-                                            screen_rects[0].clone()));
+        wm.workspaces.insert(
+            TAG_OVERVIEW,
+            Workspace::new(
+                config.clone(),
+                wm.anchor_window,
+                TAG_OVERVIEW,
+                None,
+                lookup_layout(config.clone(), TAG_OVERVIEW),
+                screen_rects[0].clone(),
+            ),
+        );
 
-        let net_atom_list = vec![atoms::net_active_window(),
-                                 atoms::net_client_list(),
-                                 atoms::net_supported(),
-                                 atoms::net_wm_state_fullscreen(),
-                                 atoms::net_wm_state_modal(),
-                                 atoms::net_wm_state_above(),
-                                 atoms::net_wm_name(),
-                                 atoms::net_wm_state(),
-                                 atoms::net_wm_state(),
-                                 atoms::net_wm_window_type(),
-                                 atoms::net_wm_window_type_dialog(),
-                                 atoms::net_wm_window_type_dock()];
+        let net_atom_list = vec![
+            atoms::net_active_window(),
+            atoms::net_client_list(),
+            atoms::net_supported(),
+            atoms::net_wm_state_fullscreen(),
+            atoms::net_wm_state_modal(),
+            atoms::net_wm_state_above(),
+            atoms::net_wm_name(),
+            atoms::net_wm_state(),
+            atoms::net_wm_state(),
+            atoms::net_wm_window_type(),
+            atoms::net_wm_window_type_dialog(),
+            atoms::net_wm_window_type_dock(),
+        ];
         unsafe {
-            xlib::XChangeProperty(display,
-                                  root,
-                                  atoms::net_supported(),
-                                  xlib::XA_ATOM,
-                                  32,
-                                  xlib::PropModeReplace,
-                                  net_atom_list.as_ptr() as *mut u8,
-                                  net_atom_list.len() as c_int);
+            xlib::XChangeProperty(
+                display,
+                root,
+                atoms::net_supported(),
+                xlib::XA_ATOM,
+                32,
+                xlib::PropModeReplace,
+                net_atom_list.as_ptr() as *mut u8,
+                net_atom_list.len() as c_int,
+            );
             xlib::XDeleteProperty(display, root, atoms::net_client_list());
             let mut xattr: xlib::XSetWindowAttributes = zeroed();
             xattr.cursor = xlib::XCreateFontCursor(display, xproto::XC_LEFT_PTR);
-            xattr.event_mask =
-                xlib::SubstructureNotifyMask | xlib::SubstructureRedirectMask |
+            xattr.event_mask = xlib::SubstructureNotifyMask | xlib::SubstructureRedirectMask |
                 xlib::ButtonPressMask | xlib::PointerMotionMask |
-                xlib::EnterWindowMask | xlib::LeaveWindowMask |
+                xlib::EnterWindowMask |
+                xlib::LeaveWindowMask |
                 xlib::StructureNotifyMask | xlib::PropertyChangeMask;
-            xlib::XChangeWindowAttributes(display,
-                                          root,
-                                          xlib::CWEventMask | xlib::CWCursor,
-                                          &mut xattr);
+            xlib::XChangeWindowAttributes(
+                display,
+                root,
+                xlib::CWEventMask | xlib::CWCursor,
+                &mut xattr,
+            );
             xlib::XSelectInput(display, root, xattr.event_mask);
         }
         wm.grab_keys();
@@ -222,13 +244,15 @@ impl WindowManager {
                 unsafe {
                     let code = xlib::XKeysymToKeycode(self.display, key.1 as c_ulong);
                     for modifier in modifiers.iter() {
-                        xlib::XGrabKey(self.display,
-                                       code as c_int,
-                                       key.0 | modifier,
-                                       self.root,
-                                       1,
-                                       xlib::GrabModeAsync,
-                                       xlib::GrabModeAsync);
+                        xlib::XGrabKey(
+                            self.display,
+                            code as c_int,
+                            key.0 | modifier,
+                            self.root,
+                            1,
+                            xlib::GrabModeAsync,
+                            xlib::GrabModeAsync,
+                        );
                     }
                 }
             }
@@ -252,14 +276,16 @@ impl WindowManager {
             }
             for c in v.iter_mut() {
                 unsafe {
-                    xlib::XChangeProperty(self.display,
-                                          self.root,
-                                          atoms::net_client_list(),
-                                          xlib::XA_WINDOW,
-                                          32,
-                                          xlib::PropModeAppend,
-                                          &mut c.window() as *mut c_ulong as *mut c_uchar,
-                                          1);
+                    xlib::XChangeProperty(
+                        self.display,
+                        self.root,
+                        atoms::net_client_list(),
+                        xlib::XA_WINDOW,
+                        32,
+                        xlib::PropModeAppend,
+                        &mut c.window() as *mut c_ulong as *mut c_uchar,
+                        1,
+                    );
                 }
             }
         }
@@ -309,16 +335,19 @@ impl WindowManager {
                 self.current_workspace_mut().remove_client(c.clone());
             }
             self.current_tag = tag;
+            debug!("[select_tag] self.current_tag={}", self.current_tag);
             for c in sticky_clients.iter_mut() {
                 c.set_tag(tag);
                 self.current_workspace_mut().new_client(c.clone(), true);
             }
         }
         unsafe {
-            xlib::XSetInputFocus(self.display,
-                                 self.root,
-                                 xlib::RevertToPointerRoot,
-                                 xlib::CurrentTime);
+            xlib::XSetInputFocus(
+                self.display,
+                self.root,
+                xlib::RevertToPointerRoot,
+                xlib::CurrentTime,
+            );
         }
         self.arrange_windows();
         // TODO: This logic is a bit messy.. could be cleared up.
@@ -328,6 +357,11 @@ impl WindowManager {
                     self.back_stack.push(oc.clone());
                 }
             }
+            debug!(
+                "[select_tag] set focus to: {} - {}",
+                c.window(),
+                c.get_title()
+            );
             self.set_focus(c);
         } else {
             if let Some(oc) = old_client {
@@ -365,7 +399,10 @@ impl WindowManager {
     pub fn set_fullscreen(&mut self, client: ClientW, fullscreen: bool) {
         {
             let workspace = self.workspaces.get(&client.tag()).unwrap();
-            client.clone().set_fullscreen(workspace.rect.clone(), fullscreen);
+            client.clone().set_fullscreen(
+                workspace.rect.clone(),
+                fullscreen,
+            );
         }
         if !fullscreen {
             self.arrange_windows();
@@ -543,16 +580,19 @@ impl WindowManager {
         let rect = client.get_rect();
         let mouse_mask = xlib::ButtonPressMask | xlib::ButtonReleaseMask | xlib::PointerMotionMask;
         if unsafe {
-            xlib::XGrabPointer(self.display,
-                               self.root,
-                               0,
-                               mouse_mask as c_uint,
-                               xlib::GrabModeAsync,
-                               xlib::GrabModeAsync,
-                               0,
-                               0,
-                               xlib::CurrentTime) == xlib::GrabSuccess
-        } {
+            xlib::XGrabPointer(
+                self.display,
+                self.root,
+                0,
+                mouse_mask as c_uint,
+                xlib::GrabModeAsync,
+                xlib::GrabModeAsync,
+                0,
+                0,
+                xlib::CurrentTime,
+            ) == xlib::GrabSuccess
+        }
+        {
             if let Some((x, y)) = util::get_root_pointer(self.display, self.root) {
                 let mut event: xlib::XEvent = unsafe { zeroed() };
                 let mut last_time: xlib::Time = 0;
@@ -595,26 +635,31 @@ impl WindowManager {
         let rect = client.get_rect();
         let mouse_mask = xlib::ButtonPressMask | xlib::ButtonReleaseMask | xlib::PointerMotionMask;
         if unsafe {
-            xlib::XGrabPointer(self.display,
-                               self.root,
-                               0,
-                               mouse_mask as c_uint,
-                               xlib::GrabModeAsync,
-                               xlib::GrabModeAsync,
-                               0,
-                               0,
-                               xlib::CurrentTime) == xlib::GrabSuccess
-        } {
+            xlib::XGrabPointer(
+                self.display,
+                self.root,
+                0,
+                mouse_mask as c_uint,
+                xlib::GrabModeAsync,
+                xlib::GrabModeAsync,
+                0,
+                0,
+                xlib::CurrentTime,
+            ) == xlib::GrabSuccess
+        }
+        {
             unsafe {
-                xlib::XWarpPointer(self.display,
-                                   0,
-                                   client.window(),
-                                   0,
-                                   0,
-                                   0,
-                                   0,
-                                   rect.width + self.config.border_width - 1,
-                                   rect.height + self.config.border_width - 1);
+                xlib::XWarpPointer(
+                    self.display,
+                    0,
+                    client.window(),
+                    0,
+                    0,
+                    0,
+                    0,
+                    rect.width + self.config.border_width - 1,
+                    rect.height + self.config.border_width - 1,
+                );
                 xlib::XSync(self.display, 0);
             }
             let mut event: xlib::XEvent = unsafe { zeroed() };
@@ -645,15 +690,17 @@ impl WindowManager {
             }
             unsafe {
                 let rect = client.get_rect();
-                xlib::XWarpPointer(self.display,
-                                   0,
-                                   client.window(),
-                                   0,
-                                   0,
-                                   0,
-                                   0,
-                                   rect.width + self.config.border_width - 1,
-                                   rect.height + self.config.border_width - 1);
+                xlib::XWarpPointer(
+                    self.display,
+                    0,
+                    client.window(),
+                    0,
+                    0,
+                    0,
+                    0,
+                    rect.width + self.config.border_width - 1,
+                    rect.height + self.config.border_width - 1,
+                );
                 xlib::XUngrabPointer(self.display, xlib::CurrentTime);
             }
         }
@@ -665,47 +712,58 @@ impl WindowManager {
         } else {
             self.current_tag
         };
-        let mut client = ClientW::new(self.config.clone(),
-                                      self.display,
-                                      self.root,
-                                      window,
-                                      self.anchor_window,
-                                      self.current_tag);
+        let mut client = ClientW::new(
+            self.config.clone(),
+            self.display,
+            self.root,
+            window,
+            self.anchor_window,
+            self.current_tag,
+        );
         client.update_title();
         client.set_tag(tag);
         client.update_size_hints();
         client.set_size(xa.x, xa.y, xa.width, xa.height);
         client.save_window_size();
-        client.set_border_color(self.colors.normal_border_color,
-                                self.colors.focused_border_color);
-        debug!("start to managing client: {}, window {}",
-               client.get_title(),
-               client.window());
+        client.set_border_color(
+            self.colors.normal_border_color,
+            self.colors.focused_border_color,
+        );
+        debug!(
+            "start to managing client: {}, window {}",
+            client.get_title(),
+            client.window()
+        );
         unsafe {
-            xlib::XChangeProperty(self.display,
-                                  self.root,
-                                  atoms::net_client_list(),
-                                  xlib::XA_WINDOW,
-                                  32,
-                                  xlib::PropModeAppend,
-                                  &client.window() as *const c_ulong as *const u8,
-                                  1);
+            xlib::XChangeProperty(
+                self.display,
+                self.root,
+                atoms::net_client_list(),
+                xlib::XA_WINDOW,
+                32,
+                xlib::PropModeAppend,
+                &client.window() as *const c_ulong as *const u8,
+                1,
+            );
             let mut wc: xlib::XWindowChanges = zeroed();
             wc.border_width = self.config.border_width;
             self.update_window_type(client.clone());
             if !(client.is_dock()) {
-                xlib::XConfigureWindow(self.display,
-                                       window,
-                                       xlib::CWBorderWidth as c_uint,
-                                       &mut wc);
+                xlib::XConfigureWindow(
+                    self.display,
+                    window,
+                    xlib::CWBorderWidth as c_uint,
+                    &mut wc,
+                );
                 xlib::XSetWindowBorder(self.display, window, self.colors.normal_border_color);
                 client.configure();
             }
-            xlib::XSelectInput(self.display,
-                               window,
-                               xlib::EnterWindowMask | xlib::FocusChangeMask |
-                               xlib::PropertyChangeMask |
-                               xlib::StructureNotifyMask);
+            xlib::XSelectInput(
+                self.display,
+                window,
+                xlib::EnterWindowMask | xlib::FocusChangeMask | xlib::PropertyChangeMask |
+                    xlib::StructureNotifyMask,
+            );
             client.grab_buttons(false);
             client.set_state(xproto::NORMAL_STATE);
             xlib::XMapWindow(self.display, window);
@@ -753,12 +811,14 @@ impl WindowManager {
         let all_clients = self.all_clients();
         let current_clients = self.current_clients();
         let current_focused = self.current_focused();
-        self.logger.dump(&self.config,
-                         &self.workspaces,
-                         &all_clients,
-                         self.current_tag,
-                         &current_clients,
-                         current_focused);
+        self.logger.dump(
+            &self.config,
+            &self.workspaces,
+            &all_clients,
+            self.current_tag,
+            &current_clients,
+            current_focused,
+        );
     }
 
     pub fn arrange_windows(&mut self) {
@@ -770,7 +830,8 @@ impl WindowManager {
                 continue;
             }
             if tag != self.current_tag && self.current_tag != TAG_OVERVIEW &&
-               screen_rect.x == w.rect.x && screen_rect.y == w.rect.y {
+                screen_rect.x == w.rect.x && screen_rect.y == w.rect.y
+            {
                 w.show(false);
             }
         }
@@ -843,45 +904,49 @@ impl XWindowManager for WindowManager {
             self.current_workspace_mut().restack();
         }
         if event.button == xlib::Button1 && event.state & self.config.mod_key != 0 {
-            if let Some(mut c) = self.current_workspace()
-                .get_client_by_window(event.window) {
+            if let Some(mut c) = self.current_workspace().get_client_by_window(event.window) {
                 self.move_mouse(&mut c);
             }
         }
         if event.button == xlib::Button3 && event.state & self.config.mod_key != 0 {
-            if let Some(mut c) = self.current_workspace()
-                .get_client_by_window(event.window) {
+            if let Some(mut c) = self.current_workspace().get_client_by_window(event.window) {
                 self.resize_mouse(&mut c);
             }
         }
     }
 
     fn on_client_message(&mut self, event: xlib::XClientMessageEvent) {
-        debug!("client message atom {}, window: {}, state: {}, {}, {}",
-               atoms::get_atom(event.message_type),
-               event.window,
-               event.data.get_long(0),
-               event.data.get_long(1),
-               event.data.get_long(2));
+        debug!(
+            "client message atom {}, window: {}, state: {}, {}, {}",
+            atoms::get_atom(event.message_type),
+            event.window,
+            event.data.get_long(0),
+            event.data.get_long(1),
+            event.data.get_long(2)
+        );
         if let Some(title) = util::get_text_prop(self.display, event.window, atoms::net_wm_name()) {
-            debug!(" window {}, title: {}, state: {}, {}, {}",
-                   event.window,
-                   title,
-                   event.data.get_long(0),
-                   event.data.get_long(1),
-                   event.data.get_long(2));
+            debug!(
+                " window {}, title: {}, state: {}, {}, {}",
+                event.window,
+                title,
+                event.data.get_long(0),
+                event.data.get_long(1),
+                event.data.get_long(2)
+            );
         }
         if let Some(c) = self.get_client_by_window(event.window) {
             if event.message_type == atoms::net_wm_state() {
                 if event.data.get_long(1) == atoms::net_wm_state_fullscreen() as c_long ||
-                   event.data.get_long(2) == atoms::net_wm_state_fullscreen() as c_long {
+                    event.data.get_long(2) == atoms::net_wm_state_fullscreen() as c_long
+                {
                     let fullscreen = event.data.get_long(0) == 1 ||
-                                     (event.data.get_long(0) == 2 && !c.is_fullscreen());
+                        (event.data.get_long(0) == 2 && !c.is_fullscreen());
                     debug!("client message: set_fullscreen: {}", fullscreen);
                     self.set_fullscreen(c.clone(), fullscreen);
                 }
                 if event.data.get_long(1) == atoms::net_wm_state_modal() as c_long ||
-                   event.data.get_long(2) == atoms::net_wm_state_modal() as c_long {
+                    event.data.get_long(2) == atoms::net_wm_state_modal() as c_long
+                {
                     debug!("set modal for client: {}", c.window());
                     c.clone().set_floating(true);
                     self.arrange_windows();
@@ -898,13 +963,14 @@ impl XWindowManager for WindowManager {
                 xa.sibling = event.above;
                 xa.stack_mode = event.detail;
                 let value_mask = event.value_mask &
-                                 !((xlib::CWX | xlib::CWY | xlib::CWWidth |
-                                    xlib::CWHeight) as c_ulong);
+                    !((xlib::CWX | xlib::CWY | xlib::CWWidth | xlib::CWHeight) as c_ulong);
                 unsafe {
-                    xlib::XConfigureWindow(self.display,
-                                           event.window,
-                                           value_mask as c_uint,
-                                           &mut xa);
+                    xlib::XConfigureWindow(
+                        self.display,
+                        event.window,
+                        value_mask as c_uint,
+                        &mut xa,
+                    );
                 }
             } else if (c.is_sticky() || c.tag() == self.current_tag) && c.is_floating() {
                 let mut rect = c.get_rect();
@@ -934,10 +1000,12 @@ impl XWindowManager for WindowManager {
             xa.sibling = event.above;
             xa.stack_mode = event.detail;
             unsafe {
-                xlib::XConfigureWindow(self.display,
-                                       event.window,
-                                       event.value_mask as c_uint,
-                                       &mut xa);
+                xlib::XConfigureWindow(
+                    self.display,
+                    event.window,
+                    event.value_mask as c_uint,
+                    &mut xa,
+                );
             }
         }
 
@@ -949,9 +1017,30 @@ impl XWindowManager for WindowManager {
     fn on_configure_notify(&mut self, event: xlib::XConfigureEvent) {
         // TODO: revisit for multiple monitor.
         if event.window == self.root &&
-           (event.width != self.screen_width || event.height != self.screen_height) {
+            (event.width != self.screen_width || event.height != self.screen_height)
+        {
+
+            debug!(
+                "on_configure_notify for window: {}, root: {}, width: {}, height: {}",
+                event.window,
+                self.root,
+                event.width,
+                event.height
+            );
             self.screen_width = event.width;
             self.screen_height = event.height;
+
+            for i in 0..self.config.tags.len() {
+                let tag = self.config.tags[i];
+                let screen_rects = util::get_screen_rects(self.display);
+                let current_rect = screen_rects.get(i);
+                let last_rect = screen_rects.len() - 1;
+                let w = self.workspaces.get_mut(&tag).unwrap();
+                w.update_rect(current_rect.map(|r| r.clone()).unwrap_or(
+                    screen_rects[last_rect].clone(),
+                ));
+            }
+
             self.arrange_windows();
         }
     }
@@ -965,6 +1054,11 @@ impl XWindowManager for WindowManager {
 
     fn on_enter_notify(&mut self, event: xlib::XEnterWindowEvent) {
         if let Some(c) = self.get_client_by_window(event.window) {
+            debug!(
+                "[on_enter_notify]: window {}, title: {}",
+                c.window(),
+                c.get_title()
+            );
             if c.tag() != self.current_tag && self.current_tag != TAG_OVERVIEW {
                 self.select_tag(c.tag());
             }
@@ -976,10 +1070,16 @@ impl XWindowManager for WindowManager {
     }
 
     fn on_focus_in(&mut self, event: xlib::XFocusInEvent) {
+        if event.window == self.root {
+            debug!("[on_focus_in]: focus in for root");
+            return;
+        }
         if let Some(client) = self.current_focused() {
-            debug!("focus in for: {:x} title: {}",
-                   client.window(),
-                   client.get_title());
+            debug!(
+                "focus in for: {:x} title: {}",
+                client.window(),
+                client.get_title()
+            );
             if client.window() != event.window {
                 self.set_focus(client);
             }
@@ -1024,7 +1124,8 @@ impl XWindowManager for WindowManager {
             debug!("map request for window {}", event.window);
             let mut xa: xlib::XWindowAttributes = zeroed();
             if xlib::XGetWindowAttributes(self.display, event.window, &mut xa) == 0 ||
-               xa.override_redirect != 0 {
+                xa.override_redirect != 0
+            {
                 debug!("map request got override redirect");
                 return;
             }
@@ -1055,8 +1156,10 @@ impl XWindowManager for WindowManager {
             } else if event.atom == atoms::net_wm_window_type() {
                 self.update_window_type(c.clone());
             } else if event.atom == xlib::XA_WM_SIZE_HINTS {
-                debug!("on_property_notify: received size hints from {}",
-                       c.get_title());
+                debug!(
+                    "on_property_notify: received size hints from {}",
+                    c.get_title()
+                );
             }
         }
     }
@@ -1066,9 +1169,11 @@ impl XWindowManager for WindowManager {
             if event.send_event != 0 {
                 c.clone().set_state(xproto::WITHDRAWN_STATE);
             } else {
-                debug!("unmap notify: unmanage {}, window {}",
-                       c.get_title(),
-                       c.window());
+                debug!(
+                    "unmap notify: unmanage {}, window {}",
+                    c.get_title(),
+                    c.window()
+                );
                 self.unmanage(c.clone(), false);
             }
         }

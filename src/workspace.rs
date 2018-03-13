@@ -30,13 +30,14 @@ pub struct Workspace {
 }
 
 impl Workspace {
-    pub fn new(config: Rc<Config>,
-               anchor_window: xlib::Window,
-               tag: c_uchar,
-               description: Option<String>,
-               layout: Box<Layout + 'static>,
-               rect: Rect)
-               -> Self {
+    pub fn new(
+        config: Rc<Config>,
+        anchor_window: xlib::Window,
+        tag: c_uchar,
+        description: Option<String>,
+        layout: Box<Layout + 'static>,
+        rect: Rect,
+    ) -> Self {
         Workspace {
             anchor_window: anchor_window,
             client_current: None,
@@ -72,6 +73,10 @@ impl Workspace {
             }
         }
         self.restack();
+    }
+
+    pub fn update_rect(&mut self, rect: Rect) {
+        self.rect = rect;
     }
 
     pub fn clear(&mut self) {
@@ -160,19 +165,23 @@ impl Workspace {
     }
 
     pub fn remove_client(&mut self, client: ClientW) {
-        if let Some(position) = self.clients_prev
-            .iter()
-            .position(|c| c.window() == client.window()) {
+        if let Some(position) = self.clients_prev.iter().position(
+            |c| c.window() == client.window(),
+        )
+        {
             self.clients_prev.remove(position);
             return;
         }
-        if let Some(position) = self.clients_next
-            .iter()
-            .position(|c| c.window() == client.window()) {
+        if let Some(position) = self.clients_next.iter().position(
+            |c| c.window() == client.window(),
+        )
+        {
             self.clients_next.remove(position);
             return;
         }
-        let cmp = self.client_current.clone().map(|c| c.window() == client.window());
+        let cmp = self.client_current.clone().map(
+            |c| c.window() == client.window(),
+        );
         if cmp.is_some() && cmp.unwrap() {
             self.detach_current();
         }
@@ -190,15 +199,20 @@ impl Workspace {
                 let mut wc: xlib::XWindowChanges = zeroed();
                 wc.stack_mode = xlib::Below;
                 wc.sibling = self.anchor_window;
-                xlib::XConfigureWindow(focus.display(),
-                                       focus.window(),
-                                       xlib::CWSibling as c_uint | xlib::CWStackMode as c_uint,
-                                       &mut wc);
+                xlib::XConfigureWindow(
+                    focus.display(),
+                    focus.window(),
+                    xlib::CWSibling as c_uint | xlib::CWStackMode as c_uint,
+                    &mut wc,
+                );
                 let mut xevent: xlib::XEvent = zeroed();
                 xlib::XSync(focus.display(), 0);
-                while xlib::XCheckMaskEvent(focus.display(),
-                                            xlib::EnterWindowMask,
-                                            &mut xevent) != 0 {}
+                while xlib::XCheckMaskEvent(
+                    focus.display(),
+                    xlib::EnterWindowMask,
+                    &mut xevent,
+                ) != 0
+                {}
             }
         }
     }
@@ -215,17 +229,19 @@ impl Workspace {
                 return;
             }
         }
-        if let Some(position) = self.clients_prev
-            .iter()
-            .position(|c| c.window() == client.window()) {
+        if let Some(position) = self.clients_prev.iter().position(
+            |c| c.window() == client.window(),
+        )
+        {
             for _ in 0..self.clients_prev.len() - position {
                 self.shift_focus(FocusShift::Backward);
             }
             return;
         }
-        if let Some(position) = self.clients_next
-            .iter()
-            .position(|c| c.window() == client.window()) {
+        if let Some(position) = self.clients_next.iter().position(
+            |c| c.window() == client.window(),
+        )
+        {
             for _ in 0..position + 1 {
                 self.shift_focus(FocusShift::Forward);
             }
@@ -285,21 +301,24 @@ impl Workspace {
 
         // TODO: 1) Handle sticky windows as well
         //       2) Handle other multiple screen layout
-        let strategy = self.get_layout(Rect::new(self.rect.x,
-                                                 bar_height,
-                                                 self.rect.width - 2 * self.config.border_width,
-                                                 self.rect.height - bar_height -
-                                                 2 * self.config.border_width));
+        let strategy = self.get_layout(Rect::new(
+            self.rect.x,
+            bar_height,
+            self.rect.width - 2 * self.config.border_width,
+            self.rect.height - bar_height - 2 * self.config.border_width,
+        ));
         for (mut c, r) in strategy {
             if self.tag == TAG_OVERVIEW {
                 c.resize(r, true);
                 continue;
             }
             let target_rect = if c.is_maximized() {
-                Rect::new(self.rect.x,
-                          bar_height,
-                          self.rect.width - 2 * self.config.border_width,
-                          self.rect.height - bar_height - 2 * self.config.border_width)
+                Rect::new(
+                    self.rect.x,
+                    bar_height,
+                    self.rect.width - 2 * self.config.border_width,
+                    self.rect.height - bar_height - 2 * self.config.border_width,
+                )
             } else {
                 r
             };
