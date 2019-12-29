@@ -217,6 +217,30 @@ impl WindowManager {
                 net_atom_list.as_ptr() as *mut u8,
                 net_atom_list.len() as c_int,
             );
+
+            // EWHM Compliance:
+            xlib::XChangeProperty(
+                display,
+                root,
+                atoms::net_supporting_wm_check(),
+                xlib::XA_WINDOW,
+                32,
+                xlib::PropModeReplace,
+                &mut wm.anchor_window as *mut c_ulong as *mut c_uchar,
+                1
+            );
+
+            xlib::XChangeProperty(
+                display,
+                wm.anchor_window,
+                atoms::net_supporting_wm_check(),
+                xlib::XA_WINDOW,
+                32,
+                xlib::PropModeReplace,
+                &mut wm.anchor_window as *mut c_ulong as *mut c_uchar,
+                1
+            );
+
             xlib::XDeleteProperty(display, root, atoms::net_client_list());
             let mut xattr: xlib::XSetWindowAttributes = zeroed();
             xattr.cursor = xlib::XCreateFontCursor(display, xproto::XC_LEFT_PTR);
@@ -430,6 +454,20 @@ impl WindowManager {
             let workspace = self.current_workspace_mut();
             workspace.set_focus(client.clone());
             workspace.restack();
+        }
+
+        unsafe {
+            let mut window = client.window();
+            xlib::XChangeProperty(
+                self.display,
+                self.root,
+                atoms::net_active_window(),
+                xlib::XA_WINDOW,
+                32,
+                xlib::PropModeReplace,
+                &mut window as *mut c_ulong as *mut c_uchar,
+                1,
+            );
         }
         //        client.send_event(atoms::wm_take_focus());
         self.do_log();

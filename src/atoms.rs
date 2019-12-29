@@ -81,6 +81,11 @@ pub fn net_client_list() -> xlib::Atom {
     unsafe { NET_CLIENT_LIST }
 }
 
+static mut NET_SUPPORTING_WM_CHECK: xlib::Atom = 0;
+pub fn net_supporting_wm_check() -> xlib::Atom {
+    unsafe { NET_SUPPORTING_WM_CHECK }
+}
+
 pub fn create_atoms(display: *mut xlib::Display) {
     unsafe {
         WM_PROTOCOLS = intern_atom(display, "WM_PROTOCOLS");
@@ -99,6 +104,7 @@ pub fn create_atoms(display: *mut xlib::Display) {
         NET_WM_WINDOW_TYPE_DIALOG = intern_atom(display, "_NET_WM_WINDOW_TYPE_DIALOG");
         NET_WM_WINDOW_TYPE_DOCK = intern_atom(display, "_NET_WM_WINDOW_TYPE_DOCK");
         NET_CLIENT_LIST = intern_atom(display, "_NET_CLIENT_LIST");
+        NET_SUPPORTING_WM_CHECK = intern_atom(display, "_NET_SUPPORTING_WM_CHECK")
     }
 }
 
