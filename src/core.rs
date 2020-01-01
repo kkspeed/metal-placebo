@@ -8,7 +8,7 @@ use std::rc::Rc;
 use x11::xlib;
 
 use atoms;
-use client::{ClientL, ClientW, Rect};
+use client::{ClientL, ClientW, Rect, ClientList};
 use config::*;
 use util;
 use util::clean_mask;
@@ -607,7 +607,7 @@ impl WindowManager {
                 return Some(c);
             }
         }
-        None
+        self.special_windows.get_client_by_window(window)
     }
 
     pub fn move_mouse(&mut self, client: &mut ClientW) {
